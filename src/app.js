@@ -26,6 +26,7 @@ import { cycleRouter } from './routes/cycle.routes.js';
 import { penaltyRouter } from './routes/penalty.routes.js';
 import { stripeRouter } from './routes/stripe.routes.js';
 import { locationRouter } from './routes/location.routes.js';
+import guardRouter from './routes/guard.routes.js';
 
 app.use("/v1/auth", authRouter)
 app.use("/v1/user", userRouter)
@@ -34,6 +35,7 @@ app.use("/v1/cycle", cycleRouter)
 app.use("/v1/user/penalty", penaltyRouter)
 app.use("/v1/booking", stripeRouter)
 app.use("/v1/location", locationRouter)
+app.use("/v1/guard", guardRouter)
 
 // app.use("*", (req, res) => {
 //   res.status(404).json({ success: false, message: "Route not found" });

@@ -8,79 +8,65 @@ import asyncHandler from "../utils/asyncHandler.utils.js";
 import { Cycle } from "../models/cycle.models.js";
 
 // GET, use io.socket here later to reflect latest status
-const get_all_cyclesController_merged = asyncHandler(async(req, res) => {
-    const {cycleId, latitude, longitude} = req.query
-    let getCycleByIdQuery = {}, getCyclesByLocation = {} 
+const get_all_cyclesController_merged = asyncHandler(async (req, res) => {
+  console.log("get_all_cyclesController_merged called")
+  const { cycleId } = req.query;
+  const locations = req.locations || [];
+  console.log("getAllCycles", locations);
 
-    if(cycleId)
-        getCycleByIdQuery = {_id: new mongoose.Types.ObjectId(cycleId)}
-    if(latitude && longitude){
-        const location = {
-            latitude: Number(latitude),
-            longitude: Number(longitude)
-        }
-        console.log(location)
-        getCyclesByLocation = {currentLocation: location}
-    }
-        
-    const result = await Cycle.aggregate([
-        {
-            $match: {
-                ...getCycleByIdQuery,
-                ...getCyclesByLocation
-            }
-        },
-        {
-            $sort: {cycleName: -1}
-        },
-        {
-            $project: {
-                __v: 0
-            }
-        }
-    ])
+  const matchQuery = {};
+  if (cycleId) matchQuery._id = new mongoose.Types.ObjectId(cycleId);
+  if (locations.length > 0) matchQuery.currentLocation = locations[0].coordinates;
 
-    if(!result)
-        throw new ApiError()
+  console.log(matchQuery)
 
-    res.status(200).json(new ApiResponse(200, "Data fetched successfully", result))    
-})
+  const result = await Cycle.aggregate([
+    { $match: matchQuery },
+    { $sort: { cycleName: -1 } },
+  ]);
+
+  if (!result || result.length === 0) {
+    throw new ApiError(404, "No matching cycles found");
+  }
+
+  return res.status(200).json(
+    new ApiResponse(200, "Data fetched successfully", result)
+  );
+});
+
 
 // GET
-const getAvailableCycleControllerMerged =   asyncHandler(async(req, res) => {
-    const {cycleId, location} = req.query
-    let getCycleByIdQuery = {}, getCyclesByLocation = {} 
+const getAvailableCycleControllerMerged = asyncHandler(async (req, res) => {
+  console.log("getAvailableCycleControllerMerged called")
+  const { cycleId } = req.query;
+  const locations = req.locations || [];
 
-    console.log("cycleId", cycleId)
+  const matchQuery = {
+    status: "available",
+  };
 
-    if(cycleId)
-        getCycleByIdQuery = {_id: new mongoose.Types.ObjectId(cycleId)}
-    if(location)
-        getCyclesByLocation = {currentLocation: location}
+  if (cycleId) {
+    matchQuery._id = new mongoose.Types.ObjectId(cycleId);
+  }
 
-    const result = await Cycle.aggregate([
-        {
-            $match: {
-                ...getCycleByIdQuery,
-                ...getCyclesByLocation,
-                status: "available"
-            }
-        },
-        {
-            $limit: 1
-        },
-        {
-            $project: {
-                __v: 0
-            }
-        }
-    ])
+  if (locations.length > 0) {
+    matchQuery.currentLocation = locations[0].coordinates;
+  }
 
-    if (!result || result.length === 0)
-        throw new ApiError(404, "Not Found", "No available cycles found.");
+  const result = await Cycle.aggregate([
+    { $match: matchQuery },
+    { $limit: 1 },
+    { $project: { __v: 0 } }
+  ]);
 
-    res.status(200).json(new ApiResponse(200, "Data fetched successfully", result))
-})
+  if (!result || result.length === 0) {
+    throw new ApiError(404, "Not Found", "No available cycles found.");
+  }
+
+  return res.status(200).json(
+    new ApiResponse(200, "Data fetched successfully", result)
+  );
+});
 
 // POST, adminAccess
 const addCycleController = asyncHandler(async (req, res) => {

@@ -18,7 +18,8 @@ const verifyUser = asyncHandler(async (req, res, next) => {
     
     if(!decodedToken){
         console.log("decoded token not found")
-        throw new ApiError(401, "Unauthorized Access", "accessToken has expired", "verifyUser: auth.middleWare.js")}
+        throw new ApiError(401, "Unauthorized Access", "accessToken has expired", "verifyUser: auth.middleWare.js")
+    }
 
     const user = await User.findById(decodedToken?._id).select("-password -refreshtoken")
 

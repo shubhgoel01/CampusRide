@@ -10,9 +10,13 @@ import bcrypt from 'bcrypt';
 
 // POST
 const registerController = asyncHandler(async(req, res) => {
-    const {userName, email, password, fullName, isAdmin = false} = req.body;
+    const {userName, email, password, fullName, userType = "student"} = req.body;
     if(!userName || !email || !password || !fullName)
         throw new ApiError(400, "Bad Request", "All fields are required");
+
+    // Validate userType
+    if(userType && !["student", "admin", "guard"].includes(userType))
+        throw new ApiError(400, "Bad Request", "Invalid user type. Must be student, admin, or guard");
 
     let alreadyExists = await User.aggregate([
         {
@@ -39,7 +43,7 @@ const registerController = asyncHandler(async(req, res) => {
         email,
         password,
         fullName, 
-        isAdmin
+        userType
     });
 
     const newRefreshToken = await newUser.generateRefreshToken();

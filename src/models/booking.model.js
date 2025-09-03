@@ -56,8 +56,17 @@ const bookingSchema = mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ["pending", "completed", "canceled"],
+        enum: ["pending", "returned", "completed", "canceled"],
         default: "pending"
+    },
+    receivedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: false
+    },
+    receivedAt: {
+        type: Date,
+        required: false
     },
     estimatedDistance: Number,
     duration: Number

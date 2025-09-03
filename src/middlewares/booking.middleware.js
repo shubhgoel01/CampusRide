@@ -17,6 +17,8 @@ const newBookingHandler = asyncHandler(async(req, res, next)=>{
 })
 
 const endBookingHandler = asyncHandler(async(req, res, next)=>{
+    console.log("nedBooking middleware called")
+
     const {bookingId} = req.params;
     const loggedInUser = req.user
 
@@ -25,8 +27,8 @@ const endBookingHandler = asyncHandler(async(req, res, next)=>{
     if (!booking || !booking.userId.equals(loggedInUser._id)) 
         throw new ApiError(404, 'Booking not found');
 
-    const now = new Date();
-    const expectedEnd = booking.expectedEndTime;
+    const now = Date.now();
+    const expectedEnd = booking.estimatedEndTime.getTime();
 
     const penaltyApplied = now > expectedEnd;
     const penaltyAmount = penaltyApplied
@@ -38,6 +40,8 @@ const endBookingHandler = asyncHandler(async(req, res, next)=>{
         penaltyApplied: penaltyApplied,
         penaltyAmount: penaltyAmount,
     };
+
+    console.log("nedBooking middleware ended")
 
   next();
 })

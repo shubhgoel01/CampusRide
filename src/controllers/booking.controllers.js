@@ -88,14 +88,11 @@ const cancelBookingController = asyncHandler(async (req, res) => {
 
 // PATCH
 const endBookingController = asyncHandler(async (req, res) => {
+  console.log("endBookingController Called")
+
     const {bookingId} = req.params;
     const loggedInUser = req.user;
     const { actualEndTime, penaltyApplied, penaltyAmount } = req.penaltyInfo;
-    console.log("PenaltyInfo", req.penaltyInfo)
-    console.log("actualEndTime", actualEndTime)
-    console.log("penaltyApplied", penaltyApplied)
-    console.log("penaltyAmount", penaltyAmount)
-
 
     let updatedUser = undefined
 
@@ -109,24 +106,45 @@ const endBookingController = asyncHandler(async (req, res) => {
     session.startTransaction();
 
     try {
+      console.log("updating booking")
         const updatedBooking = await Booking.findOneAndUpdate(
             { _id: new mongoose.Types.ObjectId(bookingId), userId: loggedInUser._id, status: "pending" },
-            { actualEndTime, penaltyApplied, penaltyAmount, status: "completed" },
+            { actualEndTime, penaltyApplied, penaltyAmount, status: "returned" },
             { new: true, session }
         )
+      console.log("updating booking comspleted")
 
         if (!updatedBooking)
             throw new ApiError(404, "Not Found", "Booking not found or already completed/canceled");
 
-        const updatedCycle = await Cycle.findOneAndUpdate(
-            { _id: updatedBooking.cycleId, status: "booked" },
-            { status: "available", currentLocation:  updatedBooking?.endLocation},
-            { new: true, session }
-        )  
+        console.log("updating cycle")
+        // For returned bookings, cycle remains booked until guard marks as received
+        // Only update location for round trips, status stays "booked"
+        const updateFields = {};
+
+        if (!updatedBooking.isRoundTrip) {
+            updateFields.currentLocation = {
+                type: "Point",
+                coordinates: updatedBooking.endLocation.coordinates, // [lng, lat]
+            };
+        }
+
+        let updatedCycle;
+        if (Object.keys(updateFields).length > 0) {
+            updatedCycle = await Cycle.findOneAndUpdate(
+                { _id: updatedBooking.cycleId, status: "booked" },
+                { $set: updateFields },
+                { new: true, session }
+            );
+        } else {
+            updatedCycle = await Cycle.findById(updatedBooking.cycleId).session(session);
+        }
+        console.log("updating cycle completed")
 
         if (!updatedCycle) 
-            throw new ApiError(404, "Not Found", "Cycle not found or already available");
-    
+            throw new ApiError(404, "Not Found", "Cycle not found");
+        
+        console.log("updaing user")
         if(penaltyApplied && penaltyAmount > 0) {
             updatedUser = await User.findOneAndUpdate(
                 { _id: loggedInUser._id },
@@ -135,10 +153,12 @@ const endBookingController = asyncHandler(async (req, res) => {
             )
         }
         else updatedUser = loggedInUser;
+        console.log("updaing user completed")
 
         await session.commitTransaction()
+        console.log("Transaction commited")
 
-        return res.status(200).json(new ApiResponse(200, "Booking ended successfully", {
+        return res.status(200).json(new ApiResponse(200, "Cycle returned successfully. Waiting for guard verification.", {
             booking: updatedBooking,
             cycle: updatedCycle,
             user: updatedUser
@@ -158,21 +178,17 @@ const endBookingController = asyncHandler(async (req, res) => {
 
 // GET
 const getBookings_merged = asyncHandler(async (req, res) => {
-  const { bookingId, cycleId, userId, longitude, latitude } = req.query;
+  const { bookingId, cycleId, userId } = req.query;
+  const locations = req.locations || [];  
 
   // Combine query conditions
   const matchQuery = {};
   if (bookingId) matchQuery._id = new mongoose.Types.ObjectId(bookingId);
   if (cycleId) matchQuery.cycleId = new mongoose.Types.ObjectId(cycleId);
   if (userId) matchQuery.userId = new mongoose.Types.ObjectId(userId);
-  if (longitude && latitude){
-    const endLocation = {
-      longitude: Number(longitude),
-      latitude: Number(latitude)
-    }
-    console.log(endLocation)
-     matchQuery.endLocation = endLocation;
-    }
+  
+  if(locations.length > 0)
+    matchQuery.endLocation = locations[0]
 
   const result = await Booking.aggregate([
     {
@@ -194,41 +210,92 @@ const getBookings_merged = asyncHandler(async (req, res) => {
 });
 
 // GET
-const getActiveBookings = asyncHandler(async(req, res) => {
-    const {userId, cycleId, endLocation} = req.query
-    let getActiveBookingByUserIdQuery = {}, getActiveBookingByCycleIdQuery=  {}, getActiveBookingsByEndLocationQuery = {}
+const getActiveBookings = asyncHandler(async (req, res) => {
+  const { userId, cycleId } = req.query;
+  const locations = req.locations || [];
 
-    if(userId)
-        getActiveBookingByUserIdQuery = {userId: userId}
-    if(cycleId)
-        getActiveBookingByCycleIdQuery= {cycleId: cycleId}
-    if(endLocation)
-        getActiveBookingsByEndLocationQuery = {endLocation: endLocation}
+  const matchQuery = {
+    status: "pending",
+  };
 
-    const result = await Booking.aggregate([
+  if (userId) matchQuery.userId = new mongoose.Types.ObjectId(userId);
+  if (cycleId) matchQuery.cycleId = new mongoose.Types.ObjectId(cycleId);
+  if (locations.length > 0) matchQuery.endLocation = locations[0];
+
+  const result = await Booking.aggregate([
+    { $match: matchQuery },
+    { $sort: { createdAt: -1 } },
+  ]);
+
+  if (!result)
+    throw new ApiError(404, "No active bookings found");
+
+  return res.status(200).json(
+    new ApiResponse(200, "Booking successfully fetched", result)
+  );
+});
+
+// GET - Get all returned bookings (for guards to see what needs to be received)
+const getReturnedBookingsController = asyncHandler(async (req, res) => {
+    const { locationId } = req.query;
+
+    const matchQuery = {
+        status: "returned"
+    };
+
+    // If locationId is provided, filter by end location
+    if (locationId) {
+        // This would need to be implemented based on your location system
+        // For now, we'll get all returned bookings
+    }
+
+    const returnedBookings = await Booking.aggregate([
+        { $match: matchQuery },
         {
-            $match: {
-                ...getActiveBookingByUserIdQuery,
-                ...getActiveBookingByCycleIdQuery,
-                ...getActiveBookingsByEndLocationQuery,
-                status: "pending"
+            $lookup: {
+                from: "users",
+                localField: "userId",
+                foreignField: "_id",
+                as: "user"
             }
         },
         {
-            $sort : {createdAt : -1}
+            $lookup: {
+                from: "cycles",
+                localField: "cycleId",
+                foreignField: "_id",
+                as: "cycle"
+            }
+        },
+        {
+            $unwind: "$user"
+        },
+        {
+            $unwind: "$cycle"
         },
         {
             $project: {
-                "__v": 0
+                _id: 1,
+                startTime: 1,
+                actualEndTime: 1,
+                endLocation: 1,
+                isRoundTrip: 1,
+                penaltyApplied: 1,
+                penaltyAmount: 1,
+                "user.userName": 1,
+                "user.fullName": 1,
+                "user.email": 1,
+                "cycle.cycleNumber": 1,
+                "cycle.model": 1,
+                createdAt: 1,
+                updatedAt: 1
             }
-        }
-    ])
+        },
+        { $sort: { updatedAt: -1 } }
+    ]);
 
-    if(!result)
-        throw new ApiError()
+    return res.status(200).json(new ApiResponse(200, "Returned bookings fetched successfully", returnedBookings));
+});
 
-    return res.status(200).json(new ApiResponse(200, "Booking Successfully Fetched", result))
-})
-
-export {createBookingController, endBookingController, getBookings_merged, getActiveBookings, cancelBookingController}
+export {createBookingController, endBookingController, getBookings_merged, getActiveBookings, cancelBookingController, getReturnedBookingsController}
 

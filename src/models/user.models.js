@@ -41,9 +41,10 @@ const userSchema = mongoose.Schema({
         type: Number,
         default: 0
     },
-    isAdmin: {
-        type: Boolean,
-        default: false
+    userType: {
+        type: String,
+        enum: ["student", "admin", "guard"],
+        default: "student"
     },
     refreshToken: String
 }, {timestamps: true,})
