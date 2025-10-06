@@ -21,7 +21,7 @@ Admins can manage cycles and penalties efficiently from the dashboard.
 
 ## Features
 - User authentication (JWT + bcrypt)
-- Real-time cycle availability
+- Instant cycle availability
 - Booking creation and end-trip logic
 - Penalty calculation for late returns
 - Admin cycle management
