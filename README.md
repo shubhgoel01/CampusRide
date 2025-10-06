@@ -1,4 +1,4 @@
-Campus Ride
+CampusRide
 A smart campus cycle booking app that lets students borrow and return cycles easily within the campus.
 
 ## Table Of Contents : 
@@ -32,7 +32,7 @@ Admins can manage cycles and penalties efficiently from the dashboard.
 ## Setup Instructions
 1. Clone the repository:
 
-   - git clone https://github.com/shubhgoel234ca058/cycle-rental-system.git
+   - git clone https://github.com/shubhgoel01/CampusRide.git
    - Open folder
    - npm install
 
@@ -48,6 +48,7 @@ Admins can manage cycles and penalties efficiently from the dashboard.
             - DB_URL
             - STRIPE_SECRET_KEY
             - GOOGLEMAPS_API_KEY  
+
         - frontend folder and add environment variables
             -   VITE_STRIPE_PUBLISHABLE_KEY
 
