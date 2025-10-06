@@ -6,6 +6,7 @@ A smart campus cycle booking app that lets students borrow and return cycles eas
 - Tech Stack
 - Features
 - Setup Instructions
+- Testing Credentials
 - Author
     
 ## About The Project
@@ -61,6 +62,21 @@ Admins can manage cycles and penalties efficiently from the dashboard.
         - cd frontend
         - npm start
     
+## Testing Credentials
+
+**Admin Credentials**
+    - Email: test3@gmail.com
+    - Password: 12345678
+    
+
+**Guard Credentials**
+    - Email: test4@gmail.com
+    - Password: 12345678
+
+**Student(User) Credentials**
+    - Email: test2@gmail.com
+    - Password: 12345678
+
 ## Author
 **Shubh Goel**  
 MCA Student | Android & Web Developer  
