@@ -40,6 +40,7 @@ export const logout = (userId) => api.post(`/auth/${userId}/logout`)
 export const getUser = (userId_userName) => api.get('/user', { params: { userId_userName } })
 export const getAllUsers = () => api.get('/user/all')
 export const updateUser = (userId, data) => api.patch(`/user/${userId}`, data)
+export const deleteUser = (userId) => api.delete(`/user/${userId}`)
 
 // Booking
 export const createBooking = (payload) => api.post('/booking', payload)
@@ -48,6 +49,7 @@ export const endBooking = (bookingId) => api.patch(`/booking/${bookingId}/end`)
 export const cancelBooking = (bookingId) => api.patch(`/booking/${bookingId}/cancel`)
 export const getBookings = (params) => api.get('/booking', { params })
 export const getReturnedBookings = (params) => api.get('/booking/returned', { params })
+export const getAdminBookings = (params) => api.get('/booking/admin', { params })
 
 // Cycle
 export const getAvailableCycles = (params) => api.get('/cycle/available', { params })
@@ -61,6 +63,7 @@ export const settlePenalty = (userId, data) => api.patch(`/user/penalty/${userId
 // Location
 export const addLocation = (data) => api.post('/location', data)
 export const getLocations = () => api.get('/location')
+export const getLocation = (locationId) => api.get(`/location/${locationId}`)
 export const deleteLocation = (locationId) => api.delete(`/location/${locationId}`)
 
 // Stripe / Transactions

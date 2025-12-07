@@ -80,7 +80,17 @@ const updateLocation = asyncHandler(async (req, res) => {
   });
 });
 
-// export {addLocation, deleteLocation, updateLocation}
+// GET - get location by id
+const getLocationById = asyncHandler(async (req, res) => {
+  const { locationId } = req.params
+  if (!locationId) throw new ApiError(400, 'Location id required')
+  if (!mongoose.Types.ObjectId.isValid(locationId)) throw new ApiError(400, 'Invalid location id')
+  const loc = await Location.findById(locationId)
+  if (!loc) throw new ApiError(404, 'Location not found')
+  return res.status(200).json(new ApiResponse(200, 'Location fetched', loc))
+})
+
+// (exports consolidated at end of file)
 
 // POST - lookup location name by coordinates
 const lookupLocationByCoordinates = asyncHandler(async (req, res) => {
@@ -115,4 +125,4 @@ const getLocations = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, 'Locations fetched successfully', result));
 });
 
-export { addLocation, deleteLocation, updateLocation, lookupLocationByCoordinates, getLocations }
+export { addLocation, deleteLocation, updateLocation, lookupLocationByCoordinates, getLocations, getLocationById }

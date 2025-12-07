@@ -107,7 +107,9 @@ const createBookingController = asyncHandler(async (req, res) => {
     cycleId,
     userId: loggedInUser._id,
     startLocation: locationArray[0].coordinates,
+    startLocationName: locationArray[0].name,
     endLocation: locationArray[1].coordinates,
+    endLocationName: locationArray[1].name,
     startTime,
     estimatedEndTime,
     isRoundTrip,
@@ -126,7 +128,7 @@ const cancelBookingController = asyncHandler(async (req, res) => {
   const bookingId = req.params.bookingId;
   const loggedInUser = req.user;
 
-  if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId)) 
+  if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId))
     throw new ApiError(400, "Bad Request", "Valid Booking ID is required");
 
   const updatedBooking = await Booking.findOneAndUpdate(
@@ -153,104 +155,104 @@ const endBookingController = asyncHandler(async (req, res) => {
   console.log("endBookingController Called")
   console.log('endBookingController - req.user:', req.user?._id)
 
-    const {bookingId} = req.params;
-    const loggedInUser = req.user;
-    const { actualEndTime, penaltyApplied, penaltyAmount } = req.penaltyInfo;
+  const { bookingId } = req.params;
+  const loggedInUser = req.user;
+  const { actualEndTime, penaltyApplied, penaltyAmount } = req.penaltyInfo;
 
-    let updatedUser = undefined
+  let updatedUser = undefined
 
-    if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId)) 
-        throw new ApiError(400, "Bad Request", "Valid Booking ID is required");
+  if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId))
+    throw new ApiError(400, "Bad Request", "Valid Booking ID is required");
 
-    if (!actualEndTime || penaltyApplied===undefined) 
-        throw new ApiError(400, "Bad Request", "Failed To access local time");
+  if (!actualEndTime || penaltyApplied === undefined)
+    throw new ApiError(400, "Bad Request", "Failed To access local time");
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-    try {
-      console.log('endBookingController - params.bookingId:', bookingId)
-      console.log("updating booking")
-        const updatedBooking = await Booking.findOneAndUpdate(
-            { _id: new mongoose.Types.ObjectId(bookingId), userId: loggedInUser._id, status: "pending" },
-            { actualEndTime, penaltyApplied, penaltyAmount, status: "returned" },
-            { new: true, session }
-        )
-      console.log("updating booking comspleted")
+  try {
+    console.log('endBookingController - params.bookingId:', bookingId)
+    console.log("updating booking")
+    const updatedBooking = await Booking.findOneAndUpdate(
+      { _id: new mongoose.Types.ObjectId(bookingId), userId: loggedInUser._id, status: "pending" },
+      { actualEndTime, penaltyApplied, penaltyAmount, status: "returned" },
+      { new: true, session }
+    )
+    console.log("updating booking comspleted")
 
-        if (!updatedBooking)
-            throw new ApiError(404, "Not Found", "Booking not found or already completed/canceled");
+    if (!updatedBooking)
+      throw new ApiError(404, "Not Found", "Booking not found or already completed/canceled");
 
-        console.log("updating cycle")
-        // For returned bookings, cycle remains booked until guard marks as received
-        // Only update location for round trips, status stays "booked"
-        const updateFields = {};
+    console.log("updating cycle")
+    // For returned bookings, cycle remains booked until guard marks as received
+    // Only update location for round trips, status stays "booked"
+    const updateFields = {};
 
-        if (!updatedBooking.isRoundTrip) {
-            updateFields.currentLocation = {
-                type: "Point",
-                coordinates: updatedBooking.endLocation.coordinates, // [lng, lat]
-            };
-        }
-
-        let updatedCycle;
-        if (Object.keys(updateFields).length > 0) {
-            updatedCycle = await Cycle.findOneAndUpdate(
-                { _id: updatedBooking.cycleId, status: "booked" },
-                { $set: updateFields },
-                { new: true, session }
-            );
-        } else {
-            updatedCycle = await Cycle.findById(updatedBooking.cycleId).session(session);
-        }
-        console.log("updating cycle completed")
-
-        if (!updatedCycle) 
-            throw new ApiError(404, "Not Found", "Cycle not found");
-        
-        console.log("updaing user")
-        if(penaltyApplied && penaltyAmount > 0) {
-            updatedUser = await User.findOneAndUpdate(
-                { _id: loggedInUser._id },
-                { hasPenalty: true, penaltyAmount: loggedInUser.penaltyAmount + penaltyAmount },
-                { new: true, session }
-            )
-        }
-        else updatedUser = loggedInUser;
-        console.log("updaing user completed")
-
-        await session.commitTransaction()
-        console.log("Transaction commited")
-
-        return res.status(200).json(new ApiResponse(200, "Cycle returned successfully. Waiting for guard verification.", {
-            booking: updatedBooking,
-            cycle: updatedCycle,
-            user: updatedUser
-        }));
-    } 
-    catch (error) {
-        await session.abortTransaction();
-        if(error instanceof ApiError)
-            throw error;
-        throw new ApiError(500, "Internal Server Error", "Failed to end booking", error.message);
-    } 
-    finally {
-        session.endSession();
+    if (!updatedBooking.isRoundTrip) {
+      updateFields.currentLocation = {
+        type: "Point",
+        coordinates: updatedBooking.endLocation.coordinates, // [lng, lat]
+      };
     }
+
+    let updatedCycle;
+    if (Object.keys(updateFields).length > 0) {
+      updatedCycle = await Cycle.findOneAndUpdate(
+        { _id: updatedBooking.cycleId, status: "booked" },
+        { $set: updateFields },
+        { new: true, session }
+      );
+    } else {
+      updatedCycle = await Cycle.findById(updatedBooking.cycleId).session(session);
+    }
+    console.log("updating cycle completed")
+
+    if (!updatedCycle)
+      throw new ApiError(404, "Not Found", "Cycle not found");
+
+    console.log("updaing user")
+    if (penaltyApplied && penaltyAmount > 0) {
+      updatedUser = await User.findOneAndUpdate(
+        { _id: loggedInUser._id },
+        { hasPenalty: true, penaltyAmount: loggedInUser.penaltyAmount + penaltyAmount },
+        { new: true, session }
+      )
+    }
+    else updatedUser = loggedInUser;
+    console.log("updaing user completed")
+
+    await session.commitTransaction()
+    console.log("Transaction commited")
+
+    return res.status(200).json(new ApiResponse(200, "Cycle returned successfully. Waiting for guard verification.", {
+      booking: updatedBooking,
+      cycle: updatedCycle,
+      user: updatedUser
+    }));
+  }
+  catch (error) {
+    await session.abortTransaction();
+    if (error instanceof ApiError)
+      throw error;
+    throw new ApiError(500, "Internal Server Error", "Failed to end booking", error.message);
+  }
+  finally {
+    session.endSession();
+  }
 })
 //For now not correctly handling round trip, (currentCycleLocation)
 
 // GET
 const getBookings_merged = asyncHandler(async (req, res) => {
   const { bookingId, cycleId, userId } = req.query;
-  const locations = req.locations || [];  
+  const locations = req.locations || [];
 
   // Combine query conditions
   const matchQuery = {};
   if (bookingId) matchQuery._id = new mongoose.Types.ObjectId(bookingId);
   if (cycleId) matchQuery.cycleId = new mongoose.Types.ObjectId(cycleId);
   if (userId) matchQuery.userId = new mongoose.Types.ObjectId(userId);
-  
+
   if (locations.length > 0) {
     // locations array contains objects { name, coordinates }
     // Match the stored endLocation.point by coordinates
@@ -296,16 +298,58 @@ const getActiveBookings = asyncHandler(async (req, res) => {
     matchQuery['endLocation.coordinates'] = locations[0].coordinates.coordinates;
   }
 
-  const result = await Booking.aggregate([
+  // Use aggregation to populate user and cycle info so frontend can display friendly names
+  const pipeline = [
     { $match: matchQuery },
     { $sort: { createdAt: -1 } },
-  ]);
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'userId',
+        foreignField: '_id',
+        as: 'user'
+      }
+    },
+    { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: 'cycles',
+        localField: 'cycleId',
+        foreignField: '_id',
+        as: 'cycle'
+      }
+    },
+    { $unwind: { path: '$cycle', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        _id: 1,
+        startTime: 1,
+        estimatedEndTime: 1,
+        duration: 1,
+        status: 1,
+        startLocation: 1,
+        startLocationName: 1,
+        endLocation: 1,
+        endLocationName: 1,
+        'user._id': 1,
+        'user.userName': 1,
+        'user.fullName': 1,
+        'cycle._id': 1,
+        'cycle.cycleNumber': 1,
+        'cycle.cycleName': 1,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    }
+  ];
+
+  const result = await Booking.aggregate(pipeline);
 
   if (!result)
     throw new ApiError(404, "No active bookings found");
 
   return res.status(200).json(
-    new ApiResponse(200, "Booking successfully fetched", result)
+    new ApiResponse(200, "Active bookings fetched", result)
   );
 });
 
@@ -358,6 +402,7 @@ const getReturnedBookingsController = asyncHandler(async (req, res) => {
         startTime: 1,
         actualEndTime: 1,
         endLocation: 1,
+        endLocationName: 1,
         isRoundTrip: 1,
         penaltyApplied: 1,
         penaltyAmount: 1,
@@ -376,5 +421,73 @@ const getReturnedBookingsController = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, "Returned bookings fetched successfully", returnedBookings));
 });
 
-export {createBookingController, endBookingController, getBookings_merged, getActiveBookings, cancelBookingController, getReturnedBookingsController, getStuckBookings}
+export { createBookingController, endBookingController, getBookings_merged, getActiveBookings, cancelBookingController, getReturnedBookingsController, getStuckBookings }
+
+// ADMIN: Get bookings with populated user and cycle info (for admin dashboard)
+const getAdminBookings = asyncHandler(async (req, res) => {
+  const { limit } = req.query;
+  const locations = req.locations || [];
+
+  const matchQuery = {};
+  if (locations.length > 0) {
+    matchQuery['endLocation.coordinates'] = locations[0].coordinates.coordinates;
+  }
+
+  const pipeline = [
+    { $match: matchQuery },
+    { $sort: { createdAt: -1 } },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'userId',
+        foreignField: '_id',
+        as: 'user'
+      }
+    },
+    { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: 'cycles',
+        localField: 'cycleId',
+        foreignField: '_id',
+        as: 'cycle'
+      }
+    },
+    { $unwind: { path: '$cycle', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        _id: 1,
+        status: 1,
+        startLocation: 1,
+        startLocationName: 1,
+        endLocation: 1,
+        endLocationName: 1,
+        startTime: 1,
+        actualEndTime: 1,
+        estimatedEndTime: 1,
+        estimatedDistance: 1,
+        duration: 1,
+        isRoundTrip: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        'user._id': 1,
+        'user.userName': 1,
+        'user.fullName': 1,
+        'cycle._id': 1,
+        'cycle.cycleName': 1,
+        'cycle.cycleNumber': 1
+      }
+    }
+  ];
+
+  if (limit && Number(limit) > 0) {
+    pipeline.push({ $limit: Number(limit) });
+  }
+
+  const bookings = await Booking.aggregate(pipeline);
+
+  return res.status(200).json(new ApiResponse(200, 'Admin bookings fetched', bookings));
+});
+
+export { getAdminBookings }
 

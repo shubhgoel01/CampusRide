@@ -1,15 +1,15 @@
 import mongoose from "mongoose";
 
 const pointSchema = mongoose.Schema({
-  type: {
-    type: String,
-    enum: ['Point'],
-    default: 'Point'
-  },
-  coordinates: {
-    type: [Number], // [longitude, latitude]
-    required: true
-  }
+    type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point'
+    },
+    coordinates: {
+        type: [Number], // [longitude, latitude]
+        required: true
+    }
 }, { _id: false });
 
 const bookingSchema = mongoose.Schema({
@@ -27,9 +27,17 @@ const bookingSchema = mongoose.Schema({
         type: pointSchema,
         required: true
     },
+    startLocationName: {
+        type: String,
+        trim: true
+    },
     endLocation: {
         type: pointSchema,
         required: true
+    },
+    endLocationName: {
+        type: String,
+        trim: true
     },
     isRoundTrip: {
         type: Boolean,
@@ -70,6 +78,6 @@ const bookingSchema = mongoose.Schema({
     },
     estimatedDistance: Number,
     duration: Number
-}, {timestamps: true});
+}, { timestamps: true });
 
 export const Booking = mongoose.model("Booking", bookingSchema);

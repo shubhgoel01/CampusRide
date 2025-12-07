@@ -1,0 +1,14 @@
+{
+    "watch": [
+        "src",
+        "index.html",
+        ".env",
+        "vite.config.js"
+    ],
+    "ext": "jsx,js,json,env",
+    "ignore": [
+        "node_modules/**",
+        "dist/**"
+    ],
+    "exec": "vite"
+}

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import api, { getReturnedBookings, getLocations } from '../api'
+import api, { getReturnedBookings } from '../api'
+import { ensureLocationsLoaded } from '../utils/locationCache'
 
 export default function Guard(){
   const [tab, setTab] = useState('returned')
@@ -14,8 +15,8 @@ export default function Guard(){
 
   const loadLocations = async ()=>{
     try{
-      const res = await getLocations()
-      setLocations(res?.data?.data || [])
+      const list = await ensureLocationsLoaded()
+      setLocations(list || [])
     }catch(e){ console.error(e) }
   }
 
@@ -62,17 +63,53 @@ export default function Guard(){
       <div className="bg-white p-4 rounded shadow">
         {loading ? <div>Loading...</div> : (
           <div>
-            {items.length===0 && <div>No returned bookings</div>}
-            {items.map(it => (
-              <div key={it._id} className="border-b py-2">
-                <div><strong>User:</strong> {it.user?.userName} ({it.user?.fullName})</div>
-                <div><strong>Cycle:</strong> {it.cycle?.cycleNumber} - {it.cycle?.model}</div>
-                <div><strong>Returned at:</strong> {it.actualEndTime ? new Date(it.actualEndTime).toLocaleString() : 'N/A'}</div>
-                <div className="mt-2">
-                  <button onClick={()=>markReceived(it._id)} className="bg-blue-600 text-white px-2 py-1 rounded">Mark Received</button>
-                </div>
+            {items.length===0 && <div className="text-gray-500">No returned bookings</div>}
+            {items.length>0 && (
+              <div className="w-full overflow-x-auto hide-scrollbar">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="text-sm text-slate-600">
+                      <th className="px-3 py-2">Cycle</th>
+                      <th className="px-3 py-2">User</th>
+                      <th className="px-3 py-2">Returned Time</th>
+                      <th className="px-3 py-2">Duration</th>
+                      <th className="px-3 py-2">Penalty</th>
+                      <th className="px-3 py-2">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map(r => {
+                      const userName = r.user?.fullName || r.user?.userName || r.userId || '-'
+                      const cycleName = r.cycle?.cycleNumber || r.cycle?.cycleName || r.cycleId || '-'
+                      const returnedAt = r.actualEndTime ? new Date(r.actualEndTime).toLocaleString() : '-'
+                      const duration = (r.startTime && r.actualEndTime) ? (()=>{
+                        const diff = new Date(r.actualEndTime).getTime() - new Date(r.startTime).getTime()
+                        const mins = Math.round(diff/60000)
+                        if(mins < 60) return `${mins}m`
+                        return `${Math.floor(mins/60)}h ${mins%60}m`
+                      })() : '-'
+                      return (
+                        <tr key={r._id} className={`hover:bg-gray-50 ${r.penaltyAmount && r.penaltyAmount>0 ? 'bg-red-50/30' : ''}`}>
+                          <td className="px-3 py-2 text-sm">{cycleName}</td>
+                          <td className="px-3 py-2 text-sm">{userName}</td>
+                          <td className="px-3 py-2 text-sm">{returnedAt}</td>
+                          <td className="px-3 py-2 text-sm">{duration}</td>
+                          <td className="px-3 py-2 text-sm">₹{r.penaltyAmount || 0}</td>
+                          <td className="px-3 py-2 text-sm">
+                            <button onClick={async ()=>{
+                              if(!confirm('Mark this return as verified?')) return
+                              try{
+                                await markReceived(r._id)
+                              }catch(e){ /* markReceived already alerts */ }
+                            }} className="px-2 py-1 bg-sky-600 text-white rounded text-xs">Mark Received</button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>

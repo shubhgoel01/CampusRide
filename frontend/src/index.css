@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,3 +6,56 @@
 html, body, #root {
   height: 100%;
 }
+
+/* App wide background and form centering for attractive login/register */
+/* Academic Blue Theme overrides */
+body {
+  @apply bg-slate-50 text-slate-900;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+}
+
+/* Auth pages specific background (keep the nice gradient there only) */
+.auth-bg {
+  @apply bg-gradient-to-br from-blue-900 via-indigo-900 to-slate-900;
+}
+
+:root{
+  --cr-primary: #0056b3;
+  --cr-bg: #f8fafc;
+  --cr-surface: #ffffff;
+  --cr-text: #0f172a;
+  --cr-muted: #64748b;
+}
+
+.btn-primary {
+  @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-white transition-all shadow-sm;
+  background-color: var(--cr-primary);
+}
+.btn-primary:hover { 
+  background-color: #004494; 
+}
+
+.card-base {
+  @apply bg-white border border-slate-200 rounded-xl shadow-sm;
+}
+
+
+.btn-primary{ display:inline-flex; align-items:center; gap:0.5rem; padding:0.5rem 0.75rem; border-radius:0.375rem; font-weight:600; color:white; background: linear-gradient(90deg,var(--cr-accent) 0%, var(--cr-accent-2) 100%); }
+.btn-ghost{ padding:0.25rem 0.5rem; border-radius:0.375rem; font-size:0.875rem; background: rgba(255,255,255,0.05); }
+
+.table-themed thead th{ font-size:0.875rem; color:#cbd5e1; font-weight:600 }
+.table-themed tbody tr{ border-top: 1px solid rgba(255,255,255,0.06) }
+.table-themed td, .table-themed th{ padding:0.5rem 0.75rem; font-size:0.875rem }
+
+.badge-ok{ display:inline-flex; align-items:center; padding:0.25rem 0.5rem; border-radius:0.375rem; font-size:0.875rem; font-weight:600; background:#d1fae5; color:#047857 }
+.badge-late{ display:inline-flex; align-items:center; padding:0.25rem 0.5rem; border-radius:0.375rem; font-size:0.875rem; font-weight:600; background:#fee2e2; color:#b91c1c }
+
+.pulse-dot{ width: 8px; height: 8px; border-radius: 9999px; background: #34d399; box-shadow: 0 0 0 rgba(52,211,153,0.6); animation: pulse 1.6s infinite; display:inline-block }
+@keyframes pulse{ 0%{ box-shadow: 0 0 0 0 rgba(52,211,153,0.6) } 70%{ box-shadow: 0 0 0 10px rgba(52,211,153,0) } 100%{ box-shadow: 0 0 0 0 rgba(52,211,153,0) } }
+
+.progress-track{ width:100%; height:0.5rem; background: #e6eef7; border-radius: 9999px; overflow:hidden }
+.progress-fill{ height:100%; background:#4f46e5; transition: width 300ms ease }
+
+/* Card theme helper */
+.cr-card{ background: var(--cr-card-bg); border: 1px solid rgba(255,255,255,0.06); border-radius: 0.75rem; padding: 1rem }
+

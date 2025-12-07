@@ -1,5 +1,5 @@
 import express from "express"
-import { endBookingController, createBookingController, cancelBookingController, getBookings_merged, getActiveBookings, getReturnedBookingsController, getStuckBookings } from "../controllers/booking.controllers.js"
+import { endBookingController, createBookingController, cancelBookingController, getBookings_merged, getActiveBookings, getReturnedBookingsController, getStuckBookings, getAdminBookings } from "../controllers/booking.controllers.js"
 import verifyUser from "../middlewares/auth.middleware.js"
 import { endBookingHandler, newBookingHandler} from "../middlewares/booking.middleware.js"
 import getDistanceAndTime from "../middlewares/map.middleware.js"
@@ -19,5 +19,8 @@ bookingRouter.route("/returned").get(verifyUser, geoCoding, getReturnedBookingsC
 
 // Admin-only: stuck bookings
 bookingRouter.route("/stuck").get(verifyUser, verifyAdmin, geoCoding, getStuckBookings)
+
+// Admin-only: bookings with populated user & cycle info
+bookingRouter.route("/admin").get(verifyUser, verifyAdmin, geoCoding, getAdminBookings)
 
 export {bookingRouter}
