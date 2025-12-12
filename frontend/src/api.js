@@ -11,24 +11,24 @@ const api = axios.create({
 
 // Helper to set Authorization header per-tab from sessionStorage
 const setAuthHeaderFromSession = () => {
-  try{
+  try {
     const token = sessionStorage.getItem('accessToken')
-    if(token) api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    if (token) api.defaults.headers.common['Authorization'] = `Bearer ${token}`
     else delete api.defaults.headers.common['Authorization']
-  }catch(e){ delete api.defaults.headers.common['Authorization'] }
+  } catch (e) { delete api.defaults.headers.common['Authorization'] }
 }
 
 // Initialize header for the current tab
 setAuthHeaderFromSession()
 
 // Ensure every request uses the latest token stored in sessionStorage for this tab
-api.interceptors.request.use((config)=>{
-  try{
+api.interceptors.request.use((config) => {
+  try {
     const token = sessionStorage.getItem('accessToken')
-    if(token) config.headers = { ...(config.headers||{}), Authorization: `Bearer ${token}` }
-  }catch(e){}
+    if (token) config.headers = { ...(config.headers || {}), Authorization: `Bearer ${token}` }
+  } catch (e) { }
   return config
-}, (err)=> Promise.reject(err))
+}, (err) => Promise.reject(err))
 
 // Auth
 export const register = (data) => api.post('/auth/register', data)
@@ -50,6 +50,7 @@ export const cancelBooking = (bookingId) => api.patch(`/booking/${bookingId}/can
 export const getBookings = (params) => api.get('/booking', { params })
 export const getReturnedBookings = (params) => api.get('/booking/returned', { params })
 export const getAdminBookings = (params) => api.get('/booking/admin', { params })
+export const getStuckBookings = (params) => api.get('/booking/stuck', { params })
 
 // Cycle
 export const getAvailableCycles = (params) => api.get('/cycle/available', { params })

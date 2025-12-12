@@ -1,712 +1,433 @@
 import React, { useEffect, useState } from 'react'
-import api, { getAllUsers, getBookings, getReturnedBookings, getLocations, getActiveBookings, getTransactions, getAdminBookings, getCycles } from '../api'
+import api, { getAllUsers, getBookings, getReturnedBookings, getLocations, getActiveBookings, getTransactions, getAdminBookings, getCycles, getStuckBookings } from '../api'
 import Card from '../components/Card'
-import Table from '../components/Table'
-import Button from '../components/Button'
 import Modal from '../components/Modal'
 import BookingModal from '../components/BookingModal'
 import AdminLocations from './AdminLocations'
-import { setCachedLocations } from '../utils/locationCache'
+import { setCachedLocations, formatLocation } from '../utils/locationCache'
 import AdminCycles from './AdminCycles'
 
-export default function Admin(){
-  const [tab, setTab] = useState('dashboard')
-  const [usersCount, setUsersCount] = useState(null)
-  const [activeBookingsCount, setActiveBookingsCount] = useState(null)
-  const [returnedCount, setReturnedCount] = useState(null)
-  const [activeBookings, setActiveBookings] = useState([])
+// UI Components
+const StatCard = ({ title, value, icon, color = 'blue', subtext, filter, onFilterChange }) => (
+  <div className={`bg-white rounded-xl shadow-sm border border-slate-100 p-6 relative overflow-hidden group hover:shadow-md transition-shadow`}>
+    <div className="flex items-start justify-between mb-4">
+      <div className={`p-3 rounded-xl bg-${color}-50 text-${color}-600`}>
+        {icon}
+      </div>
+      {filter && (
+        <select
+          value={filter}
+          onChange={(e) => onFilterChange(e.target.value)}
+          className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option value="today">Today</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+          <option value="all">All Time</option>
+        </select>
+      )}
+    </div>
+    <div>
+      <h3 className="text-3xl font-bold text-slate-800">{value}</h3>
+      <p className="text-slate-500 text-sm font-medium uppercase tracking-wider mt-1">{title}</p>
+      {subtext && <p className="text-xs text-slate-400 mt-2">{subtext}</p>}
+    </div>
+  </div>
+)
+
+const TabButton = ({ active, onClick, children, icon }) => (
+  <button
+    onClick={onClick}
+    className={`flex items-center gap-2 px-5 py-3 font-medium text-sm rounded-lg transition-all ${active
+      ? 'bg-primary text-white shadow-md shadow-primary/30'
+      : 'text-slate-500 hover:bg-slate-100'
+      }`}
+  >
+    {icon}
+    {children}
+  </button>
+)
+
+const StatusBadge = ({ status }) => {
+  const styles = {
+    active: 'bg-green-100 text-green-700 border-green-200',
+    completed: 'bg-blue-100 text-blue-700 border-blue-200',
+    returned: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+    canceled: 'bg-red-100 text-red-700 border-red-200',
+    pending: 'bg-orange-100 text-orange-700 border-orange-200',
+    admin: 'bg-purple-100 text-purple-700 border-purple-200',
+    user: 'bg-slate-100 text-slate-700 border-slate-200',
+    guard: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+  }
+  const s = String(status).toLowerCase()
+  return (
+    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${styles[s] || styles.user} capitalize`}>
+      {status}
+    </span>
+  )
+}
+
+export default function Admin() {
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState('dashboard') // dashboard, users, bookings, stuck, transactions, manageCycles, locations
+
+  // Data States
+  const [stats, setStats] = useState({ users: 0, active: 0, totalRides: 0, issues: 0 })
+  const [ridesFilter, setRidesFilter] = useState('all') // today, week, month, all
+
+  const [usersList, setUsersList] = useState([])
+  const [activeBookingsList, setActiveBookingsList] = useState([]) // Live rides
+  const [stuckList, setStuckList] = useState([])
+  const [allBookingsList, setAllBookingsList] = useState([]) // For stats
+  const [transactionsList, setTransactionsList] = useState([])
   const [locations, setLocations] = useState([])
-  const [loading, setLoading] = useState(false)
+
+  // Modals
   const [modalOpen, setModalOpen] = useState(false)
   const [modalBooking, setModalBooking] = useState(null)
-  // users tab state
-  const [userSearch, setUserSearch] = useState('')
-  const [userFilter, setUserFilter] = useState('all')
-  const [userSort, setUserSort] = useState('default')
-  const [usersList, setUsersList] = useState([])
-  const [filteredUsers, setFilteredUsers] = useState([])
   const [userModalOpen, setUserModalOpen] = useState(false)
-  const [userModalData, setUserModalData] = useState(null)
-  const [activeBookingUserIds, setActiveBookingUserIds] = useState(new Set())
+  const [selectedUser, setSelectedUser] = useState(null)
 
-  // booking / cycles / transactions state
-  const [bookingFilter, setBookingFilter] = useState('all')
-  const [bookingFilters, setBookingFilters] = useState({ bookingId: '', userId: '', cycleId: '', location: '', userQuery: '', hasPenalty: false })
-  const [bookingsList, setBookingsList] = useState([])
-  const [cyclesList, setCyclesList] = useState([])
-  const [returnedList, setReturnedList] = useState([])
-  const [stuckList, setStuckList] = useState([])
-  const [transactionsList, setTransactionsList] = useState([])
-  const [transactionModalOpen, setTransactionModalOpen] = useState(false)
-  const [transactionModalData, setTransactionModalData] = useState(null)
+  // Loading Functions
+  const loadStats = async () => {
+    try {
+      const [u, a, t, all] = await Promise.all([
+        getAllUsers(),
+        getActiveBookings({}),
+        getTransactions(),
+        getAdminBookings() // Fetches all bookings for admin
+      ])
 
-  const formatDate = (d) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '-'
+      const users = u?.data?.data?.length || 0
+      const active = a?.data?.data?.length || 0
+      const allBookings = all?.data?.data || []
+      const issues = allBookings.filter(b => (b.status === 'active' && (Date.now() - new Date(b.startTime).getTime()) > 4 * 3600 * 1000) || b.penaltyAmount > 500).length
 
-  // load users for Users tab
-  const loadUsers = async () => {
-    try{
-      const res = await getAllUsers()
-      const list = res?.data?.data || []
-      setUsersList(list)
-    }catch(e){ console.error('Failed to load users', e); setUsersList([]) }
+      setStats(prev => ({ ...prev, users, active, issues }))
+      setUsersList(u?.data?.data || [])
+      setActiveBookingsList(a?.data?.data || [])
+      setAllBookingsList(allBookings)
+      setTransactionsList(t?.data?.data || [])
+    } catch (e) { console.error(e) }
   }
 
-  // keep filteredUsers derived from usersList, search and filters
-  useEffect(()=>{
-    let list = Array.isArray(usersList) ? usersList.slice() : []
-    // search
-    if(userSearch && userSearch.trim()){
-      const q = userSearch.trim().toLowerCase()
-      list = list.filter(u => (u.fullName || u.userName || u.email || '').toLowerCase().includes(q))
-    }
-    // filter by penalty / active
-    if(userFilter === 'penalty') list = list.filter(u => (u.penaltyAmount || 0) > 0)
-    if(userFilter === 'active') list = list.filter(u => activeBookingUserIds.has(String(u._id)))
+  // Recalculate filtered rides when filter or data changes
+  useEffect(() => {
+    if (!allBookingsList) return
 
-    // sort
-    if(userSort === 'rides-desc') list = list.sort((a,b)=> (b.totalRides||0) - (a.totalRides||0))
-    if(userSort === 'rides-asc') list = list.sort((a,b)=> (a.totalRides||0) - (b.totalRides||0))
+    let count = 0
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    const weekStart = now.getTime() - 7 * 24 * 60 * 60 * 1000
+    const monthStart = now.getTime() - 30 * 24 * 60 * 60 * 1000
 
-    setFilteredUsers(list)
-  }, [usersList, userSearch, userFilter, userSort, activeBookingUserIds])
+    count = allBookingsList.filter(b => {
+      const t = new Date(b.startTime).getTime()
+      if (ridesFilter === 'today') return t >= todayStart
+      if (ridesFilter === 'week') return t >= weekStart
+      if (ridesFilter === 'month') return t >= monthStart
+      return true
+    }).length
 
-  const handleViewUser = async (u) => {
-    setUserModalOpen(true)
-    setUserModalData({ user: u, bookings: [] })
-    try{
-      const res = await getBookings({ userId: u._id })
-      setUserModalData({ user: u, bookings: res?.data?.data || [] })
-    }catch(e){ console.error('Failed to load user bookings', e) }
-  }
+    setStats(prev => ({ ...prev, totalRides: count }))
+  }, [ridesFilter, allBookingsList])
 
-  const handleRemoveUser = async (u) => {
-    if(!confirm('Remove user?')) return
-    try{
-      await api.delete(`/user/${u._id}`)
-      await loadUsers()
-      alert('User removed')
-    }catch(e){ alert(e?.response?.data?.message || 'Failed to remove user') }
-  }
 
-    useEffect(()=>{
-      loadStats()
-      loadActiveBookings()
-      loadLocations()
-    }, [])
-
-    // react to tab changes: load data for respective tab
-    useEffect(()=>{
-      if(tab === 'users') loadUsers()
-      if(tab === 'bookings') loadAllBookings()
-      if(tab === 'returned') loadReturned()
-      if(tab === 'stuck') loadStuck()
-      if(tab === 'transactions') loadTransactions()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [tab])
-
-    const loadStats = async ()=>{
-      try{
-        if(tab === 'bookings') { loadCycles(); loadUsers() }
-        const u = await getAllUsers()
-        setUsersCount(Array.isArray(u?.data?.data) ? u.data.data.length : 0)
-
-        // active bookings count
-        const act = await getActiveBookings()
-        setActiveBookingsCount(Array.isArray(act?.data?.data) ? act.data.data.length : 0)
-
-        const r = await getReturnedBookings({ limit: 1 })
-        setReturnedCount(r?.data?.data ? (Array.isArray(r.data.data) ? r.data.data.length : 1) : 0)
-      }catch(e){ console.error(e) }
-    }
-
-  const loadActiveBookings = async ()=>{
+  const loadData = async () => {
     setLoading(true)
-    try{
-      // fetch active bookings from backend (top source of truth for active rides)
-      const res = await getActiveBookings()
-      let data = res?.data?.data || []
-      // sort by startTime desc (newest first)
-      data = data.sort((a,b)=> new Date(b.startTime) - new Date(a.startTime))
-      // store for dashboard (limit to top 10)
-      setActiveBookings(data.slice(0,10))
-    }catch(e){ console.error(e); setActiveBookings([]) }
-    finally{ setLoading(false) }
+    await loadStats()
+    try {
+      const sRes = await getStuckBookings({ minutes: 30 })
+      setStuckList(sRes?.data?.data || [])
+    } catch (e) { console.error(e) }
+
+    try {
+      const loc = await getLocations()
+      const locData = loc?.data?.data || []
+      setLocations(locData)
+      setCachedLocations(locData)
+    } catch (e) { console.error('Load Error', e) }
+    finally { setLoading(false) }
   }
 
-  // Fetch active bookings user ids for user filters when needed
-  const fetchActiveBookingUserIds = async ()=>{
-    try{
-      const res = await getActiveBookings()
-      const data = res?.data?.data || []
-      const ids = new Set(data.map(b => String(b.userId || b.user?._id || (b.user && b.user.userId) || '')))
-      setActiveBookingUserIds(ids)
-    }catch(e){ console.error('Failed to fetch active bookings for user filter', e); setActiveBookingUserIds(new Set()) }
-  }
+  useEffect(() => { loadData() }, [])
 
-  // when userFilter switches to 'active' ensure we have the active booking user ids
-  React.useEffect(()=>{
-    if(tab === 'users' && userFilter === 'active') fetchActiveBookingUserIds()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, userFilter])
-
-  const loadLocations = async ()=>{
-    try{
-      const res = await getLocations()
-      const list = res?.data?.data || []
-      setLocations(list)
-      try{ setCachedLocations(list) }catch(e){}
-    }catch(e){ console.error(e) }
-  }
-
-  const loadCycles = async ()=>{
-    try{
-      const res = await getCycles()
-      setCyclesList(res?.data?.data || [])
-    }catch(e){ console.error(e); setCyclesList([]) }
-  }
-
-  const loadAllBookings = async () => {
-    try{
-      const res = await getAdminBookings()
-      setBookingsList(res?.data?.data || [])
-    }catch(e){ console.error('Failed to load bookings', e); setBookingsList([]) }
-  }
-
-  const loadReturned = async () => {
-    try{
-      const res = await getReturnedBookings({ limit: 200 })
-      setReturnedList(res?.data?.data || [])
-    }catch(e){ console.error('Failed to load returned list', e); setReturnedList([]) }
-  }
-
-  const loadStuck = async () => {
-    try{
-      // placeholder: no dedicated API for stuck in this file; keep empty or implement when available
-      setStuckList([])
-    }catch(e){ setStuckList([]) }
-  }
-
-  const loadTransactions = async () => {
-    try{
-      const res = await getTransactions()
-      setTransactionsList(res?.data?.data || [])
-    }catch(e){ console.error('Failed to load transactions', e); setTransactionsList([]) }
-  }
-
-  const columns = [
-    { header: 'ID', accessor: '_id', render: row => `#${String(row._id).slice(0,8)}` },
-    { header: 'User', accessor: 'user', render: row => row.user?.fullName || row.user?.userName || row.userId || '-' },
-    { header: 'Date', accessor: 'startTime', render: row => formatDate(row.startTime) }
-  ]
-
-  const formatDateTime = (d) => d ? new Date(d).toLocaleString() : '-'
-
-  const durationFrom = (start) => {
-    if(!start) return '-'
-    const diffMs = Date.now() - new Date(start).getTime()
-    const mins = Math.floor(diffMs / 60000)
-    if(mins < 60) return `${mins}m`
-    const h = Math.floor(mins/60)
-    const m = mins % 60
-    return `${h}h ${m}m`
-  }
-
-  const bookingStatus = (b) => {
-    // derive status: Near End if estimatedEndTime within 10 mins, Delayed if actualEndTime passed (or elapsed > estimated), else Ongoing
-    try{
-      const now = Date.now()
-      const estEnd = b.estimatedEndTime ? new Date(b.estimatedEndTime).getTime() : null
-      const start = b.startTime ? new Date(b.startTime).getTime() : null
-      if(estEnd && now > estEnd) return { label: 'Delayed', color: 'bg-red-600' }
-      if(estEnd && (estEnd - now) <= 10 * 60 * 1000) return { label: 'Near End', color: 'bg-yellow-500' }
-      return { label: 'Ongoing', color: 'bg-green-600' }
-    }catch(e){ return { label: b.status || 'Ongoing', color: 'bg-gray-500' } }
-  }
-
-  const openBookingModal = (b)=>{ setModalBooking(b); setModalOpen(true) }
-
-  // Safe renderer for a location value which may be a string, an object with { name, address }
-  // or a GeoJSON-like point { type, coordinates }.
-  const renderLocationSafe = (loc) => {
-    if(!loc && loc !== 0) return '—'
-    if(typeof loc === 'string') return loc
-    // if it's an object and has a human name
-    if(loc && typeof loc === 'object'){
-      if(loc.name) return loc.name
-      if(loc.address) return loc.address
-      // GeoJSON Point: coordinates may be [lng, lat] or { coordinates: [lng, lat] }
-      const coords = Array.isArray(loc.coordinates) ? loc.coordinates : (loc.coordinates && Array.isArray(loc.coordinates.coordinates) ? loc.coordinates.coordinates : null)
-      if(coords && coords.length >= 2){
-        // show lat, lng rounded
-        const [lng, lat] = coords
-        return `${lat?.toFixed(5)}, ${lng?.toFixed(5)}`
-      }
-      // fallback to stringified object
-      try{ return JSON.stringify(loc) }catch(e){ return '—' }
-    }
-    return String(loc)
+  // Actions
+  const handleRemoveUser = async (uId) => {
+    if (!confirm('Are you sure you want to remove this user? THIS CANNOT BE UNDONE.')) return
+    try {
+      await api.delete(`/users/${uId}`)
+      alert('User removed')
+      loadData()
+      setUserModalOpen(false)
+    } catch (e) { alert('Failed to remove user') }
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 h-full">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-full">
-        {/* Sidebar */}
-        <aside className="col-span-1">
-          <div className="bg-white/5 rounded-lg p-4 sticky top-6 max-h-[calc(100vh-4rem)] overflow-auto hide-scrollbar">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center font-bold">CR</div>
-              <div className="font-semibold">CampusRide</div>
-            </div>
-            <nav className="space-y-3 text-sm">
-              <button onClick={()=>setTab('dashboard')} className={`w-full text-left px-3 py-2 rounded ${tab==='dashboard' ? 'bg-sky-50/10 text-sky-100 font-medium' : 'hover:bg-white/5'}`}>Dashboard</button>
-              <button onClick={()=>setTab('users')} className={`w-full text-left px-3 py-2 rounded ${tab==='users' ? 'bg-sky-50/10 text-sky-100 font-medium' : 'hover:bg-white/5'}`}>Users</button>
-              <button onClick={()=>setTab('bookings')} className={`w-full text-left px-3 py-2 rounded ${tab==='bookings' ? 'bg-sky-50/10 text-sky-100 font-medium' : 'hover:bg-white/5'}`}>Bookings</button>
-              <button onClick={()=>setTab('returned')} className={`w-full text-left px-3 py-2 rounded ${tab==='returned' ? 'bg-sky-50/10 text-sky-100 font-medium' : 'hover:bg-white/5'}`}>Returned</button>
-              <button onClick={()=>setTab('stuck')} className={`w-full text-left px-3 py-2 rounded ${tab==='stuck' ? 'bg-sky-50/10 text-sky-100 font-medium' : 'hover:bg-white/5'}`}>Stuck</button>
-              <button onClick={()=>setTab('transactions')} className={`w-full text-left px-3 py-2 rounded ${tab==='transactions' ? 'bg-sky-50/10 text-sky-100 font-medium' : 'hover:bg-white/5'}`}>Transactions</button>
-              <hr className="my-2" />
-              <button onClick={()=>setTab('manageCycles')} className={`w-full text-left px-3 py-2 rounded ${tab==='manageCycles' ? 'bg-sky-50/10 text-sky-100 font-medium' : 'hover:bg-white/5'}`}>Manage Cycles</button>
-              <button onClick={()=>setTab('locations')} className={`w-full text-left px-3 py-2 rounded ${tab==='locations' ? 'bg-sky-50/10 text-sky-100 font-medium' : 'hover:bg-white/5'}`}>Manage Locations</button>
-            </nav>
-          </div>
-        </aside>
+    <div className="space-y-6">
 
-  {/* Main content */}
-  <main className="col-span-1 md:col-span-3 max-h-[calc(100vh-4rem)] overflow-auto hide-scrollbar">
-          {tab === 'dashboard' ? (
-            <div className="flex items-start justify-between gap-6">
-              <div className="flex-1">
-                <h1 className="text-4xl font-bold mb-2">Admin Dashboard</h1>
-                <p className="text-gray-400 mb-6">Overview of users, bookings and returns</p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                  <Card>
-                    <div className="text-2xl font-semibold">{usersCount ?? '—'}</div>
-                    <div className="text-sm text-gray-400">Users</div>
-                  </Card>
-                  <Card>
-                    <div className="text-2xl font-semibold">{activeBookingsCount ?? '—'}</div>
-                    <div className="text-sm text-gray-400">Active Bookings</div>
-                  </Card>
-                  <Card>
-                    <div className="text-2xl font-semibold">{returnedCount ?? '—'}</div>
-                    <div className="text-sm text-gray-400">Returned</div>
-                  </Card>
-                </div>
-
-                {/* Active Bookings card */}
-                <div className="bg-gradient-to-r from-indigo-900 to-blue-900 rounded-xl p-4 text-gray-200 shadow-md">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-lg">Active Bookings</h3>
-                    <div className="text-sm text-indigo-100">Top {activeBookings.length} • Updated</div>
-                  </div>
-
-                  {loading ? (
-                    <div className="text-gray-300">Loading active bookings...</div>
-                  ) : activeBookings.length === 0 ? (
-                    <div className="flex items-center gap-3 p-6 rounded-md bg-white/5">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-6a2 2 0 012-2h2a2 2 0 012 2v6m-6 0h6" /></svg>
-                      <div>No ongoing rides currently.</div>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto rounded-md hide-scrollbar">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="text-sm text-indigo-100">
-                            <th className="px-3 py-2">ID</th>
-                            <th className="px-3 py-2">User</th>
-                            <th className="px-3 py-2">Cycle</th>
-                            <th className="px-3 py-2">Start Time</th>
-                            <th className="px-3 py-2">Duration</th>
-                            <th className="px-3 py-2">Location</th>
-                            <th className="px-3 py-2">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {activeBookings.map((b, idx) => {
-                            const st = bookingStatus(b)
-                            return (
-                              <tr key={b._id || idx} onClick={()=>openBookingModal(b)} className="border-t cursor-pointer hover:bg-white/5 transition">
-                                <td className="px-3 py-2 text-xs">{String(b._id).slice(0,8)}</td>
-                                <td className="px-3 py-2 text-xs">{b.user?.fullName || b.user?.userName || (b.userId ? String(b.userId).slice(0,8) : '-')}</td>
-                                <td className="px-3 py-2 text-xs">{b.cycle?.cycleNumber || b.cycle?.cycleName || (b.cycleId ? String(b.cycleId).slice(0,8) : '-')}</td>
-                                <td className="px-3 py-2 text-xs">{formatDateTime(b.startTime)}</td>
-                                <td className="px-3 py-2 text-xs">{durationFrom(b.startTime)}</td>
-                                <td className="px-3 py-2 text-xs">{b.endLocation?.name || b.startLocation?.name || b.location || renderLocationSafe(b.endLocation || b.location || b.startLocation)}</td>
-                                <td className="px-3 py-2 text-sm">
-                                  <span className={`inline-block px-2 py-1 rounded text-xs ${st.color}`}>{st.label}</span>
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Illustration on the right */}
-              <div className="hidden lg:block w-96">
-                <img src="/assets/admin-hero.svg" alt="Campus illustration" className="rounded-lg shadow-md" />
-              </div>
-            </div>
-          ) : (
-            <div>
-              {tab === 'users' && (
-                <Card>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold">Users</h3>
-                    <div className="flex items-center gap-3">
-                      <input value={userSearch} onChange={e=>setUserSearch(e.target.value)} placeholder="Search name or email" className="bg-white/5 placeholder-gray-300 text-sm px-2 py-1 rounded" />
-                      <div className="flex items-center gap-2">
-                        <div className="flex rounded bg-white/5 p-1">
-                          <button onClick={()=>setUserFilter('all')} className={`px-3 py-1 text-sm ${userFilter==='all' ? 'bg-white/10 font-medium' : ''}`}>All</button>
-                          <button onClick={()=>setUserFilter('penalty')} className={`px-3 py-1 text-sm ${userFilter==='penalty' ? 'bg-white/10 font-medium' : ''}`}>Has Penalty</button>
-                          <button onClick={()=>setUserFilter('active')} className={`px-3 py-1 text-sm ${userFilter==='active' ? 'bg-white/10 font-medium' : ''}`}>Has Active Booking</button>
-                        </div>
-                        <select value={userSort} onChange={e=>setUserSort(e.target.value)} className="bg-white/5 px-2 py-1 rounded text-sm">
-                          <option value="default">Sort: Default</option>
-                          <option value="rides-desc">Most Rides</option>
-                          <option value="rides-asc">Least Rides</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {filteredUsers.length===0 ? (
-                    <div className="text-gray-400">No users found</div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {filteredUsers.map(u => (
-                        <div key={u._id} onClick={()=>handleViewUser(u)} className="backdrop-blur-sm bg-white/6 border border-white/6 rounded-xl p-3 hover:shadow-2xl hover:-translate-y-1 transition transform cursor-pointer">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-lg text-white truncate">{u.userName || u.fullName || 'User'}</div>
-                              <div className="text-sm text-gray-300 truncate">{u.role || 'User'}</div>
-                            </div>
-
-                            <div className="flex-shrink-0 flex flex-col items-end gap-2">
-                              <div className="text-sm text-red-300 font-medium">₹{u.penaltyAmount || 0}</div>
-                              <div className="text-xs text-gray-400">Penalty</div>
-                              <div className="mt-2">
-                                <button onClick={(e)=>{ e.stopPropagation(); handleRemoveUser(u) }} className="px-2 py-1 bg-red-600 text-white rounded text-xs whitespace-nowrap">Remove</button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {userModalOpen && (
-                    <Modal open={true} title={`User: ${userModalData?.user?.fullName || userModalData?.user?.userName || ''}`} onClose={()=>{ setUserModalOpen(false); setUserModalData(null) }}>
-                      <div className="text-sm">
-                        <div className="mb-2"><strong>Email:</strong> {userModalData?.user?.email}</div>
-                        <div className="mb-2"><strong>Total Rides:</strong> {userModalData?.bookings?.length || 0}</div>
-                        <div className="mb-2"><strong>Active Penalty:</strong> <span className={`${(userModalData?.user?.penaltyAmount || 0) > 0 ? 'text-red-300' : 'text-gray-300'}`}>₹{userModalData?.user?.penaltyAmount || 0}</span></div>
-
-                        <h4 className="font-semibold mt-3">Recent Bookings</h4>
-                        <div className="mt-2 space-y-2">
-                          {userModalData?.bookings?.length===0 ? (
-                            <div className="text-gray-500 text-sm">No bookings</div>
-                          ) : (
-                            userModalData.bookings.map(b => (
-                              <div key={b._id} className="p-2 border rounded bg-white/5 text-xs">
-                                <div className="flex items-center justify-between mb-1">
-                                  <div className="font-medium">#{String(b._id).slice(0,8)} • <span className="text-gray-300">{b.status}</span></div>
-                                  <div className={`px-2 py-0.5 rounded text-[10px] ${b.penaltyAmount && b.penaltyAmount>0 ? 'bg-red-600 text-white' : 'bg-white/5 text-gray-200'}`}>₹{b.penaltyAmount || 0}</div>
-                                </div>
-                                <div className="text-xs text-gray-300">Start: <span className="text-white">{renderLocationSafe(b.startLocation)}</span></div>
-                                <div className="text-xs text-gray-300">Destination: <span className="text-white">{renderLocationSafe(b.endLocation)}</span></div>
-                                <div className="text-xs text-gray-400 mt-1">Started: {formatDateTime(b.startTime)}</div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    </Modal>
-                  )}
-                </Card>
-              )}
-
-              {tab === 'bookings' && (
-                <div className="relative">
-                  <Card>
-                    <div className="flex flex-col gap-3 mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex rounded bg-white/5 p-1">
-                        {['all','ongoing','completed','cancelled'].map(f=> (
-                          <button key={f} onClick={()=>setBookingFilter(f)} className={`px-3 py-1 text-sm ${bookingFilter===f ? 'bg-white/10 font-medium' : ''}`}>{f.charAt(0).toUpperCase()+f.slice(1)}</button>
-                        ))}
-                      </div>
-                      <div className="ml-4 text-sm text-gray-300">Filters:</div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <input placeholder="Booking ID" value={bookingFilters.bookingId} onChange={e=>setBookingFilters(s=>({...s, bookingId: e.target.value}))} className="bg-white/5 px-2 py-1 rounded text-sm" />
-
-                      <input placeholder="User name or ID" value={bookingFilters.userQuery} onChange={e=>setBookingFilters(s=>({...s, userQuery: e.target.value}))} className="bg-white/5 px-2 py-1 rounded text-sm" />
-
-                      <select value={bookingFilters.userId} onChange={e=>setBookingFilters(s=>({...s, userId: e.target.value}))} className="bg-white/5 px-2 py-1 rounded text-sm">
-                        <option value="">All Users</option>
-                        {usersList.map(u => <option key={u._id} value={u._id}>{u.fullName || u.userName}</option>)}
-                      </select>
-
-                      <select value={bookingFilters.cycleId} onChange={e=>setBookingFilters(s=>({...s, cycleId: e.target.value}))} className="bg-white/5 px-2 py-1 rounded text-sm">
-                        <option value="">All Cycles</option>
-                        {cyclesList.map(c => <option key={c._id} value={c._id}>{c.cycleNumber || c.cycleName || String(c._id).slice(0,6)}</option>)}
-                      </select>
-
-
-                      <select value={bookingFilters.location} onChange={e=>setBookingFilters(s=>({...s, location: e.target.value}))} className="bg-white/5 px-2 py-1 rounded text-sm">
-                        <option value="">All Locations</option>
-                        {locations.map(l => <option key={l._id} value={l.name || `${(l.coordinates?.coordinates || l.coordinates || []).join(',')}`}>{l.name || (l.coordinates && l.coordinates.coordinates ? `${l.coordinates.coordinates[1].toFixed(4)}, ${l.coordinates.coordinates[0].toFixed(4)}` : String(l._id).slice(0,6))}</option>)}
-                      </select>
-
-                      <button onClick={()=>setBookingFilters(s=>({...s, hasPenalty: !s.hasPenalty}))} className={`px-3 py-1 text-sm ${bookingFilters.hasPenalty ? 'bg-white/10 font-medium' : 'bg-white/5'}`}>{bookingFilters.hasPenalty ? 'Has Penalty: ON' : 'Has Penalty'}</button>
-
-                      <div className="flex items-center gap-2 ml-2">
-                        <button onClick={()=>loadAllBookings()} className="px-3 py-1 bg-sky-600 text-white rounded text-sm">Apply</button>
-                        <button onClick={()=>{ setBookingFilters({ bookingId: '', userId: '', cycleId: '', location: '' }); setBookingFilter('all'); loadAllBookings(); }} className="px-3 py-1 bg-white/5 text-sm rounded">Clear</button>
-                      </div>
-                    </div>
-                    </div>
-                  </Card>
-                  {/* background image + gradient overlay */}
-                  <div className="absolute inset-0 -z-10 bg-cover bg-center" style={{ backgroundImage: "url('/assets/illustration.svg')" }} />
-                  <div className="absolute inset-0 -z-5 bg-gradient-to-b from-[#0b1530]/80 to-[#1b2a60]/80" />
-
-                  <div className="relative">
-                    <h3 className="text-3xl font-semibold mb-6 text-white">Bookings</h3>
-
-                    {bookingsList.length === 0 ? (
-                      <Card>
-                        <div className="text-gray-400">No bookings found</div>
-                      </Card>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-
-                        {(bookingsList.filter(b => {
-                          // status filter
-                          if(bookingFilter === 'ongoing' && !(b.status === 'pending' || b.status === 'ongoing')) return false
-                          if(bookingFilter === 'completed' && !(b.status === 'completed' || b.status === 'returned')) return false
-                          if(bookingFilter === 'cancelled' && !(b.status === 'canceled' || b.status === 'cancelled')) return false
-
-                          // booking id filter
-                          if(bookingFilters.bookingId && !String(b._id).includes(String(bookingFilters.bookingId))) return false
-
-                          // user select filter
-                          if(bookingFilters.userId && String(b.userId || b.user?._id || '') !== String(bookingFilters.userId)) return false
-
-                          // user query (name or id)
-                          if(bookingFilters.userQuery && bookingFilters.userQuery.trim()){
-                            const q = bookingFilters.userQuery.trim().toLowerCase()
-                            const userName = (b.user?.fullName || b.user?.userName || '').toLowerCase()
-                            const userIdStr = String(b.userId || b.user?._id || '').toLowerCase()
-                            if(!userName.includes(q) && !userIdStr.includes(q)) return false
-                          }
-
-                          // cycle filter
-                          if(bookingFilters.cycleId && String(b.cycleId || b.cycle?._id || '') !== String(bookingFilters.cycleId)) return false
-
-                          // location filter (match against startLocation name/address or coordinates string)
-                          if(bookingFilters.location){
-                            const startLoc = b.startLocation || {}
-                            const locName = (startLoc.name || startLoc.address || (Array.isArray(startLoc.coordinates) ? startLoc.coordinates.join(',') : '') || '').toString().toLowerCase()
-                            if(!locName.includes(String(bookingFilters.location).toLowerCase())) return false
-                          }
-
-                          // penalty filter
-                          if(bookingFilters.hasPenalty){ if(!(b.penaltyAmount && b.penaltyAmount > 0)) return false }
-
-                          return true
-                        })).map(b => {
-                          const userName = b.user?.fullName || b.user?.userName || (b.user && b.user.userName) || 'Unknown'
-                          const cycleName = b.cycle?.cycleName || b.cycle?.cycleNumber || (b.cycle && b.cycle.cycleNumber) || '—'
-                          const startLocName = renderLocationSafe(b.startLocation || b.startLocation?.coordinates || b.startLocation?.address || b.startLocation?.name)
-                          const endLocName = renderLocationSafe(b.endLocation || b.endLocation?.coordinates || b.endLocation?.address || b.endLocation?.name)
-                          const statusClass = b.status === 'completed' ? 'bg-emerald-600 text-white' : b.status === 'pending' ? 'bg-yellow-500 text-black' : 'bg-red-600 text-white'
-
-                          return (
-                            <div key={b._id} onClick={()=>openBookingModal(b)} className="backdrop-blur-sm bg-white/6 border border-white/6 rounded-xl p-4 hover:shadow-2xl hover:-translate-y-1 transition transform cursor-pointer">
-                              <div className="flex items-start justify-between mb-2">
-                                <div className="text-sm text-slate-200">#{String(b._id).slice(0,8)}</div>
-                                <div>
-                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusClass}`}>{b.status}</span>
-                                </div>
-                              </div>
-
-                              <div className="font-semibold text-lg text-white mb-1">{userName}</div>
-                              <div className="text-xs text-slate-200 mb-2">Cycle: {cycleName}</div>
-
-                              <div className="text-xs text-slate-300">From: <span className="font-medium text-slate-100">{b.startLocation?.name || startLocName}</span></div>
-                              <div className="text-xs text-slate-300">To: <span className="font-medium text-slate-100">{b.endLocation?.name || endLocName}</span></div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {tab === 'returned' && (
-                <Card>
-                  <h3 className="font-semibold mb-3">Returned</h3>
-                  {returnedList.length===0 ? <div className="text-gray-400">No returned bookings</div> : (
-                    <div className="w-full overflow-x-auto hide-scrollbar">
-                      <table className="w-full text-left">
-                        <thead>
-                          <tr className="text-sm text-gray-300">
-                            <th className="px-3 py-2">Cycle</th>
-                            <th className="px-3 py-2">User</th>
-                            <th className="px-3 py-2">Returned Time</th>
-                            <th className="px-3 py-2">Duration</th>
-                            <th className="px-3 py-2">Penalty</th>
-                            <th className="px-3 py-2">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {returnedList.map(r => {
-                            const userName = r.user?.fullName || r.user?.userName || r.userId || '-'
-                            const cycleName = r.cycle?.cycleNumber || r.cycle?.cycleName || r.cycleId || '-'
-                            const returnedAt = r.actualEndTime ? new Date(r.actualEndTime).toLocaleString() : '-'
-                            const duration = (r.startTime && r.actualEndTime) ? (()=>{
-                              const diff = new Date(r.actualEndTime).getTime() - new Date(r.startTime).getTime()
-                              const mins = Math.round(diff/60000)
-                              if(mins < 60) return `${mins}m`
-                              return `${Math.floor(mins/60)}h ${mins%60}m`
-                            })() : '-'
-                            return (
-                              <tr key={r._id} className={`hover:bg-white/5 ${r.penaltyAmount && r.penaltyAmount>0 ? 'bg-red-50/20' : ''}`}>
-                                <td className="px-3 py-2 text-sm">{cycleName}</td>
-                                <td className="px-3 py-2 text-sm">{userName}</td>
-                                <td className="px-3 py-2 text-sm">{returnedAt}</td>
-                                <td className="px-3 py-2 text-sm">{duration}</td>
-                                <td className="px-3 py-2 text-sm">₹{r.penaltyAmount || 0}</td>
-                                <td className="px-3 py-2 text-sm">
-                                  <button onClick={async ()=>{
-                                    if(!confirm('Mark this return as verified?')) return
-                                    try{
-                                      const res = await api.patch(`/guard/mark-received/${r._id}`)
-                                      alert('Marked as verified')
-                                      loadReturned()
-                                    }catch(e){ alert(e?.response?.data?.message || 'Failed to mark verified') }
-                                  }} className="px-2 py-1 bg-sky-600 text-white rounded text-xs">Mark as Verified</button>
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </Card>
-              )}
-
-              {tab === 'stuck' && (
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">Stuck / Reported Issues</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {stuckList.length===0 && <div className="text-gray-400">No issues reported</div>}
-                    {stuckList.map(s => (
-                      <div key={s._id} className="p-3 rounded-lg border-l-4 border-orange-400 bg-white/5 max-h-40 overflow-auto hide-scrollbar text-xs">
-                        <div className="mb-2">
-                          <div className="font-medium text-sm truncate">Cycle: {s.cycle?.cycleNumber || s.cycleId || '-'}</div>
-                          <div className="text-[11px] text-gray-300">Status: {s.status || 'pending'}</div>
-                        </div>
-
-                        <div className="mb-2">
-                          <div className="text-[11px] text-gray-300">Reported by:</div>
-                          <div className="text-[12px] text-white truncate">{s.user?.fullName || s.user?.userName || s.userId || '-'}</div>
-                        </div>
-
-                        <div className="mb-3 text-[12px] text-gray-200 whitespace-pre-wrap">{s.issue || s.description || 'No description provided'}</div>
-
-                        <div className="flex items-center gap-2">
-                          <button onClick={async ()=>{
-                            if(!confirm('Mark as resolved?')) return
-                            try{
-                              // try to cancel booking as a fallback; may require proper permissions
-                              await api.patch(`/booking/${s._id}/cancel`)
-                              alert('Marked resolved (backend action attempted)')
-                              loadStuck()
-                            }catch(e){ alert(e?.response?.data?.message || 'Failed to resolve') }
-                          }} className="px-2 py-1 bg-emerald-600 text-white rounded text-xs">Resolve</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {tab === 'transactions' && (
-                <Card>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold">Transactions</h3>
-                    <div>
-                      <button onClick={()=>{
-                        if(!transactionsList || transactionsList.length===0) return alert('No transactions to export')
-                        const rows = [['Transaction ID','User','Amount','Type','Date']]
-                        transactionsList.forEach(t => rows.push([String(t._id), t.userName || (t.user && (t.user.fullName || t.user.userName)) || t.userId || '', (Number(t.amount||0)/100).toFixed(2), t.type || t.description || '', new Date(t.createdAt || t.date || Date.now()).toLocaleString()]))
-                        const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n')
-                        const blob = new Blob([csv], { type: 'text/csv' })
-                        const url = URL.createObjectURL(blob)
-                        const a = document.createElement('a')
-                        a.href = url
-                        a.download = `transactions_${Date.now()}.csv`
-                        a.click()
-                        URL.revokeObjectURL(url)
-                      }} className="px-3 py-1 bg-sky-600 text-white rounded text-sm">Download CSV</button>
-                    </div>
-                  </div>
-
-                  {transactionsList.length===0 ? <div className="text-gray-400">No transactions</div> : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                      {transactionsList.map(t => {
-                        const userLabel = t.userName || (t.user && (t.user.fullName || t.user.userName)) || t.userId || '-' 
-                        const amountR = (t.amount || 0)
-                        const amountRupees = (Number(amountR) / 100).toFixed(2)
-                        const when = new Date(t.createdAt || t.date || Date.now()).toLocaleString()
-                        return (
-                          <div key={t._id} onClick={()=>{ setTransactionModalData(t); setTransactionModalOpen(true) }} className="backdrop-blur-sm bg-white/6 border border-white/6 rounded-xl p-4 hover:shadow-2xl hover:-translate-y-1 transition transform cursor-pointer">
-                            <div className="flex items-start justify-end mb-2">
-                              <div className="text-xs text-gray-400">{t.type || t.description || ''}</div>
-                            </div>
-
-                            <div className="font-semibold text-lg text-white mb-1">{userLabel}</div>
-                            <div className="text-sm text-slate-200 mb-2">₹{amountRupees}</div>
-                            <div className="text-xs text-gray-300">{when}</div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {transactionModalOpen && (
-                    <Modal open={true} title={`Transaction: #${String(transactionModalData?._id || '').slice(0,8)}`} onClose={() => { setTransactionModalOpen(false); setTransactionModalData(null) }}>
-                      <div className="text-sm space-y-2">
-                        <div><strong>ID:</strong> {transactionModalData?._id}</div>
-                        <div><strong>User:</strong> {transactionModalData?.userName || (transactionModalData?.user && (transactionModalData.user.fullName || transactionModalData.user.userName)) || transactionModalData?.userId || '-'}</div>
-                        <div><strong>Amount:</strong> ₹{(Number(transactionModalData?.amount || 0)/100).toFixed(2)}</div>
-                        <div><strong>Type:</strong> {transactionModalData?.type || transactionModalData?.description || '-'}</div>
-                        <div><strong>Date:</strong> {new Date(transactionModalData?.createdAt || transactionModalData?.date || Date.now()).toLocaleString()}</div>
-                        {transactionModalData?.meta && <div><strong>Meta:</strong> <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(transactionModalData.meta, null, 2)}</pre></div>}
-                      </div>
-                    </Modal>
-                  )}
-                </Card>
-              )}
-
-              {tab === 'manageCycles' && <AdminCycles />}
-              {tab === 'locations' && <AdminLocations />}
-            </div>
-          )}
-        </main>
+      {/* Header & Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="Total Users"
+          value={stats.users}
+          icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
+          color="blue"
+        />
+        <StatCard
+          title="Active Rides"
+          value={stats.active}
+          icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
+          color="green"
+          subtext="Current live bookings"
+        />
+        <StatCard
+          title="Total Rides"
+          value={stats.totalRides}
+          filter={ridesFilter}
+          onFilterChange={setRidesFilter}
+          icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}
+          color="indigo"
+        />
+        <StatCard
+          title="Pending Issues"
+          value={stats.issues}
+          icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}
+          color="red"
+        />
       </div>
-      {/* Booking details modal */}
-  <BookingModal open={modalOpen} booking={modalBooking} onClose={()=>setModalOpen(false)} locations={locations} />
-    </div>
+
+      {/* Navigation */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-2 flex flex-wrap gap-2 sticky top-0 z-10">
+        <TabButton active={tab === 'dashboard'} onClick={() => setTab('dashboard')} icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>}>
+          Overview
+        </TabButton>
+        <TabButton active={tab === 'users'} onClick={() => setTab('users')} icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>}>
+          Users
+        </TabButton>
+        <TabButton active={tab === 'active'} onClick={() => setTab('active')} icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}>
+          Live Rides
+        </TabButton>
+        <TabButton active={tab === 'manageCycles'} onClick={() => setTab('manageCycles')} icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-8a2 2 0 012-2h14a2 2 0 012 2v8M16 10V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v5" /></svg>}>
+          Cycles
+        </TabButton>
+        <TabButton active={tab === 'locations'} onClick={() => setTab('locations')} icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>}>
+          Locations
+        </TabButton>
+        <TabButton active={tab === 'transactions'} onClick={() => setTab('transactions')} icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}>
+          Finance
+        </TabButton>
+        <TabButton active={tab === 'stuck'} onClick={() => setTab('stuck')} icon={<svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}>
+          Stuck ({stuckList.length})
+        </TabButton>
+      </div>
+
+      {/* Content Area */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden min-h-[500px]">
+        {/* USERS TAB */}
+        {tab === 'users' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-600">
+              <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500">
+                <tr>
+                  <th className="px-6 py-4">User</th>
+                  <th className="px-6 py-4">Role</th>
+                  <th className="px-6 py-4">Penalty</th>
+                  <th className="px-6 py-4">Contact</th>
+                  <th className="px-6 py-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {usersList.map(u => (
+                  <tr key={u._id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600">
+                          {u.fullName ? u.fullName[0] : 'U'}
+                        </div>
+                        <div>
+                          <div className="font-semibold text-slate-900">{u.fullName || u.userName}</div>
+                          <div className="text-xs text-slate-400">ID: {u._id.slice(-6)}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4"><StatusBadge status={u.userType || 'user'} /></td>
+                    <td className="px-6 py-4 text-xs font-mono">
+                      {u.penaltyAmount > 0 ? <span className="text-red-600 font-bold">₹{(u.penaltyAmount / 100).toFixed(2)}</span> : <span className="text-slate-300">₹0.00</span>}
+                    </td>
+                    <td className="px-6 py-4">{u.email || u.phoneNumber || '—'}</td>
+                    <td className="px-6 py-4">
+                      <button onClick={() => { setSelectedUser(u); setUserModalOpen(true) }} className="text-primary hover:text-primary-dark font-medium text-xs">View</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* ACTIVE RIDES TAB */}
+        {tab === 'active' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-600">
+              <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500">
+                <tr>
+                  <th className="px-6 py-4">User</th>
+                  <th className="px-6 py-4">Cycle</th>
+                  <th className="px-6 py-4">Start Time</th>
+                  <th className="px-6 py-4">Location</th>
+                  <th className="px-6 py-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {activeBookingsList.map(b => (
+                  <tr key={b._id} onClick={() => { setModalBooking(b); setModalOpen(true) }} className="hover:bg-slate-50 transition-colors cursor-pointer">
+                    <td className="px-6 py-4 font-medium text-slate-900">{b.user?.fullName || b.userId}</td>
+                    <td className="px-6 py-4 font-mono text-xs">{b.cycle?.cycleName || b.cycleId}</td>
+                    <td className="px-6 py-4">{new Date(b.startTime).toLocaleTimeString()}</td>
+                    <td className="px-6 py-4 text-xs font-medium text-slate-500 max-w-[200px] truncate">{formatLocation(b.startLocation)}</td>
+                    <td className="px-6 py-4"><StatusBadge status="active" /></td>
+                  </tr>
+                ))}
+                {activeBookingsList.length === 0 && (
+                  <tr><td colSpan="5" className="px-6 py-8 text-center text-slate-400">No active rides right now.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* TRANSACTIONS TAB */}
+        {tab === 'transactions' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-600">
+              <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500">
+                <tr>
+                  <th className="px-6 py-4">Date</th>
+                  <th className="px-6 py-4">User</th>
+                  <th className="px-6 py-4">Amount</th>
+                  <th className="px-6 py-4">Type</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {transactionsList.map(t => (
+                  <tr key={t._id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4">{new Date(t.createdAt).toLocaleDateString()}</td>
+                    <td className="px-6 py-4">{t.userName || t.userId}</td>
+                    <td className="px-6 py-4 font-mono font-medium text-slate-800">
+                      ₹{(Number(t.amount) / 100).toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4"><span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs">{t.type}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* STUCK BOOKINGS TAB */}
+        {tab === 'stuck' && (
+          <div className="overflow-x-auto">
+            <div className="p-4 bg-red-50 text-red-700 text-sm border-b border-red-100 mb-0">
+              These bookings have been in <b>pending</b> state for more than 30 minutes. They might be abandoned or have had a network failure.
+            </div>
+            <table className="w-full text-left text-sm text-slate-600">
+              <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500">
+                <tr>
+                  <th className="px-6 py-4">User</th>
+                  <th className="px-6 py-4">Cycle</th>
+                  <th className="px-6 py-4">Started At</th>
+                  <th className="px-6 py-4">Elapsed Time</th>
+                  <th className="px-6 py-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {stuckList.length === 0 && (
+                  <tr><td colSpan="5" className="px-6 py-8 text-center text-slate-400">No stuck bookings found. Used filter: &gt; 30 mins</td></tr>
+                )}
+                {stuckList.map(b => {
+                  const elapsed = Math.floor((Date.now() - new Date(b.startTime).getTime()) / 60000)
+                  return (
+                    <tr key={b._id} onClick={() => { setModalBooking(b); setModalOpen(true) }} className="hover:bg-slate-50 transition-colors cursor-pointer group">
+                      <td className="px-6 py-4 font-medium text-slate-900">{b.user?.fullName || b.userId}</td>
+                      <td className="px-6 py-4 font-mono text-xs">{b.cycle?.cycleName || b.cycleId}</td>
+                      <td className="px-6 py-4">{new Date(b.startTime).toLocaleTimeString()}</td>
+                      <td className="px-6 py-4">
+                        <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold text-xs animate-pulse">
+                          {elapsed} mins
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button className="text-primary hover:text-primary-dark font-medium text-xs">View/Close</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* SUB COMPONENTS */}
+        {tab === 'manageCycles' && <div className="p-6"><AdminCycles /></div>}
+        {tab === 'locations' && <div className="p-6"><AdminLocations /></div>}
+
+        {/* DASHBOARD OVERVIEW */}
+        {tab === 'dashboard' && (
+          <div className="p-8 text-center">
+            <div className="max-w-md mx-auto py-12">
+              <div className="w-24 h-24 bg-slate-50 rounded-full mx-auto mb-4 flex items-center justify-center text-primary/20">
+                <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>
+              </div>
+              <h3 className="text-xl font-bold text-slate-800">Dashboard Overview</h3>
+              <p className="text-slate-500 mt-2">
+                Welcome to the centralized admin control panel.
+                Use the navigation tabs above to manage users, track live rides, update cycles, and view financial reports.
+              </p>
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {/* Modals */}
+      {modalOpen && <BookingModal open={modalOpen} booking={modalBooking} onClose={() => setModalOpen(false)} locations={locations} />}
+
+      {
+        userModalOpen && selectedUser && (
+          <Modal open={true} onClose={() => setUserModalOpen(false)} title="User Details">
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-slate-200 flex items-center justify-center text-2xl font-bold text-slate-500">
+                  {selectedUser.fullName ? selectedUser.fullName[0] : 'U'}
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">{selectedUser.fullName}</h3>
+                  <p className="text-slate-500 text-sm">{selectedUser.email}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm mt-4">
+                <div className="p-3 bg-slate-50 rounded-lg">
+                  <div className="text-xs text-slate-400 uppercase">Role</div>
+                  <div className="font-semibold capitalize">{selectedUser.userType}</div>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-lg">
+                  <div className="text-xs text-slate-400 uppercase">Joined</div>
+                  <div className="font-semibold">{new Date(selectedUser.createdAt).toLocaleDateString()}</div>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-lg col-span-2">
+                  <div className="text-xs text-slate-400 uppercase">Penalty</div>
+                  <div className="font-semibold text-red-600">₹{(selectedUser.penaltyAmount / 100).toFixed(2)}</div>
+                </div>
+              </div>
+              <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
+                <button onClick={() => setUserModalOpen(false)} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-50 rounded-lg">Close</button>
+                <button onClick={() => handleRemoveUser(selectedUser._id)} className="px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700">Remove User</button>
+              </div>
+            </div>
+          </Modal>
+        )
+      }
+    </div >
   )
 }

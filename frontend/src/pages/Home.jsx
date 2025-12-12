@@ -84,7 +84,9 @@ export default function Home() {
     // Open Stripe Payment Modal
     // We use a dummy 24-char hex string to satisfy Mongoose ObjectId requirement if strictly validated
     const dummyPenaltyId = "000000000000000000000000"
-    openBookingPayment(dummyPenaltyId, user.penaltyAmount)
+    // user.penaltyAmount is in paise, but payment processing expects rupees
+    const penaltyInRupees = user.penaltyAmount / 100
+    openBookingPayment(dummyPenaltyId, penaltyInRupees)
   }
 
   const handleEndBookingById = async (bookingId) => {
@@ -143,15 +145,22 @@ export default function Home() {
   const [elapsedMs, setElapsedMs] = useState(0)
 
   useEffect(() => {
-    if (!showActiveModal || !selectedActiveBooking) return;
-    const start = selectedActiveBooking.startTime ? new Date(selectedActiveBooking.startTime).getTime() : Date.now()
-    // initialize
-    setElapsedMs(Math.max(0, Date.now() - start))
+    // If we have an active booking (card visible), run the timer
+    const booking = activeBookings && activeBookings.length > 0 ? activeBookings[0] : null
+    if (!booking) {
+      setElapsedMs(0)
+      return
+    }
+
+    const start = booking.startTime ? new Date(booking.startTime).getTime() : Date.now()
+    setElapsedMs(Math.max(0, Date.now() - start)) // immediate update
+
     const t = setInterval(() => {
       setElapsedMs(Math.max(0, Date.now() - start))
     }, 1000)
+
     return () => clearInterval(t)
-  }, [showActiveModal, selectedActiveBooking])
+  }, [activeBookings])
 
   const formatDuration = (ms) => {
     if (ms == null || isNaN(ms)) return '00:00:00'
@@ -263,7 +272,7 @@ export default function Home() {
             {/* Conditional Stats: Show Penalty if > 0, else show Total History */}
             {user?.penaltyAmount > 0 ? (
               <div className="text-center flex-1 p-4 bg-red-50 rounded-xl border border-red-100 relative group">
-                <div className="text-3xl font-bold text-red-600">₹{user.penaltyAmount}</div>
+                <div className="text-3xl font-bold text-red-600">₹{(user.penaltyAmount / 100).toFixed(2)}</div>
                 <div className="text-xs text-red-500 font-bold uppercase tracking-wide mt-1">Penalty</div>
 
                 {/* Hover/Action to Pay */}
@@ -362,7 +371,7 @@ export default function Home() {
               Your last ride with cycle <span className="font-bold font-mono">{renderCycleName(returnedBookings[0])}</span> has been ended.
               Please wait for the guard to verify the return. You cannot rent a new cycle until this verification is complete.
             </div>
-            <div className="grid grid-cols-2 gap-4 text-sm text-slate-500">
+            <div className="grid grid-cols-2 gap-4 text-sm text-slate-500 mb-6">
               <div>
                 <span className="font-semibold block text-slate-700 mb-0.5">Ended At</span>
                 {returnedBookings[0].actualEndTime ? new Date(returnedBookings[0].actualEndTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
@@ -374,6 +383,14 @@ export default function Home() {
                 </span>
               </div>
             </div>
+
+            <button
+              onClick={() => openReturnedBooking(returnedBookings[0])}
+              className="w-full py-3 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800 font-semibold text-sm transition-colors flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+              View Full Receipt Details
+            </button>
           </div>
         )}
 

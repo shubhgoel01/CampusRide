@@ -16,7 +16,8 @@ const createPaymentIntent = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Invalid amount provided. Amount must be a positive number (in rupees).');
   }
 
-  const amountPaise = Math.round(amountNum * 10000);
+  // Amount expected in Rupees, convert to Paise (1 Rupee = 100 Paise)
+  const amountPaise = Math.round(amountNum * 100);
 
   let paymentIntent;
   try {
@@ -66,11 +67,11 @@ const createTransaction = asyncHandler(async (req, res) => {
 
   // Deduct penalty if applicable
   if (user) {
-    const paidRupees = transaction.amount / 100;
+    const paidPaise = transaction.amount; // transaction.amount is in paise
     await User.findByIdAndUpdate(user._id, {
       $set: {
-        penaltyAmount: Math.max(0, (user.penaltyAmount || 0) - paidRupees),
-        hasPenalty: ((user.penaltyAmount || 0) - paidRupees) > 0,
+        penaltyAmount: Math.max(0, (user.penaltyAmount || 0) - paidPaise),
+        hasPenalty: ((user.penaltyAmount || 0) - paidPaise) > 0,
       },
     });
   }

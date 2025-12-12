@@ -46,7 +46,7 @@ export default function BookingModal({ open, booking, onClose }) {
             {booking.status}
           </div>
           <div className="text-3xl font-bold text-slate-800">
-            {booking.penaltyAmount && booking.penaltyAmount > 0 ? `₹${booking.penaltyAmount}` : '₹0.00'}
+            {booking.penaltyAmount && booking.penaltyAmount > 0 ? `₹${(booking.penaltyAmount / 100).toFixed(2)}` : '₹0.00'}
           </div>
           <div className="text-xs text-slate-500 uppercase tracking-wide mt-1">Total Paid</div>
         </div>
