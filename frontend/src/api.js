@@ -10,13 +10,13 @@ const api = axios.create({
 })
 
 // Helper to set Authorization header per-tab from sessionStorage
-const setAuthHeaderFromSession = () => {
-  try {
-    const token = sessionStorage.getItem('accessToken')
-    if (token) api.defaults.headers.common['Authorization'] = `Bearer ${token}`
-    else delete api.defaults.headers.common['Authorization']
-  } catch (e) { delete api.defaults.headers.common['Authorization'] }
-}
+const setAuthHeaderFromSession = () => {  
+    try {
+      const token = sessionStorage.getItem('accessToken')
+      if (token) api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+      else delete api.defaults.headers.common['Authorization']
+    } catch (e) { delete api.defaults.headers.common['Authorization'] }
+  }
 
 // Initialize header for the current tab
 setAuthHeaderFromSession()
