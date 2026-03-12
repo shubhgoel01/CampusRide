@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import api, { getCycles, addCycle, deleteCycle } from "../api";
+import { getCycles, addCycle, deleteCycle } from "../api";
 import { ensureLocationsLoaded } from "../utils/locationCache";
 
-export default function AdminCycles() {
+export default function AdminCycles({ onStatusNotice }) {
   const [cycles, setCycles] = useState([]);
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -41,18 +41,24 @@ export default function AdminCycles() {
   };
 
   const handleAdd = async () => {
-    if (!name) return alert("Please provide cycle name");
+    if (!name) {
+      onStatusNotice?.("error", "Please provide cycle name");
+      return;
+    }
     try {
       const payload = { cycleName: name, status };
       if (location) payload.location = location;
       await addCycle(payload);
-      alert("Cycle added");
+      onStatusNotice?.("success", "Cycle added successfully");
       setName("");
       setStatus("available");
       setLocation("");
       loadCycles();
     } catch (e) {
-      alert(e?.response?.data?.message || "Failed to add cycle");
+      onStatusNotice?.(
+        "error",
+        e?.response?.data?.message || "Failed to add cycle",
+      );
     }
   };
 
@@ -61,10 +67,13 @@ export default function AdminCycles() {
     if (!confirm("Delete cycle? This action cannot be undone.")) return;
     try {
       await deleteCycle(cId);
-      alert("Cycle deleted");
+      onStatusNotice?.("success", "Cycle deleted successfully");
       loadCycles();
     } catch (e) {
-      alert(e?.response?.data?.message || "Failed to delete cycle");
+      onStatusNotice?.(
+        "error",
+        e?.response?.data?.message || "Failed to delete cycle",
+      );
     }
   };
 
@@ -180,7 +189,7 @@ export default function AdminCycles() {
         <div className="mt-4 flex justify-end">
           <button
             onClick={handleAdd}
-            className="px-5 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark transition-colors text-sm shadow-sm transition-transform active:scale-95"
+            className="px-5 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark transition-all text-sm shadow-sm active:scale-95"
           >
             + Add Cycle
           </button>

@@ -6,7 +6,7 @@ export default function AdminUsersTable({ users, onViewUser }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm text-slate-600">
-        <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500">
+        <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 sticky top-0 z-10">
           <tr>
             <th className="px-6 py-4">User</th>
             <th className="px-6 py-4">Role</th>
@@ -16,8 +16,18 @@ export default function AdminUsersTable({ users, onViewUser }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
+          {users.length === 0 && (
+            <tr>
+              <td colSpan="5" className="px-6 py-10 text-center text-slate-500">
+                No users found. New registrations will appear here.
+              </td>
+            </tr>
+          )}
           {users.map((u) => (
-            <tr key={u._id} className="hover:bg-slate-50 transition-colors">
+            <tr
+              key={u._id}
+              className="odd:bg-white even:bg-slate-50/40 hover:bg-slate-50 transition-colors"
+            >
               <td className="px-6 py-4">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600">

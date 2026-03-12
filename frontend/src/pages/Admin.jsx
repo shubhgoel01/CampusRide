@@ -10,6 +10,7 @@ import AdminActiveRidesTable from "../components/admin/AdminActiveRidesTable";
 import AdminTransactionsTable from "../components/admin/AdminTransactionsTable";
 import AdminStuckBookingsTable from "../components/admin/AdminStuckBookingsTable";
 import AdminUserDetailsModal from "../components/admin/AdminUserDetailsModal";
+import StatusBanner from "../components/StatusBanner";
 
 const tabs = [
   {
@@ -140,6 +141,7 @@ export default function Admin() {
     locations,
     modalOpen,
     modalBooking,
+    statusNotice,
     userModalOpen,
     selectedUser,
     setTab,
@@ -148,6 +150,8 @@ export default function Admin() {
     setModalBooking,
     setUserModalOpen,
     setSelectedUser,
+    clearStatusNotice,
+    pushStatusNotice,
     handleRemoveUser,
   } = useAdminDashboard();
 
@@ -169,6 +173,8 @@ export default function Admin() {
 
   return (
     <div className="space-y-6">
+      <StatusBanner notice={statusNotice} onClose={clearStatusNotice} />
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <AdminStatCard
           title="Total Users"
@@ -255,7 +261,7 @@ export default function Admin() {
         />
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-2 flex flex-wrap gap-2 sticky top-0 z-10">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-2 flex items-center gap-2 sticky top-0 z-10 overflow-x-auto whitespace-nowrap">
         {tabs.map((item) => (
           <AdminTabButton
             key={item.key}
@@ -263,7 +269,7 @@ export default function Admin() {
             onClick={() => setTab(item.key)}
             icon={item.icon}
           >
-            {item.key === "stuck" ? `Stuck (${stuckList.length})` : item.label}
+            {item.label}
           </AdminTabButton>
         ))}
         <AdminTabButton
@@ -310,12 +316,12 @@ export default function Admin() {
         )}
         {tab === "manageCycles" && (
           <div className="p-6">
-            <AdminCycles />
+            <AdminCycles onStatusNotice={pushStatusNotice} />
           </div>
         )}
         {tab === "locations" && (
           <div className="p-6">
-            <AdminLocations />
+            <AdminLocations onStatusNotice={pushStatusNotice} />
           </div>
         )}
 

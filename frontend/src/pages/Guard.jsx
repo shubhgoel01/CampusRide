@@ -2,29 +2,32 @@ import React from "react";
 import { useGuardDashboard } from "../hooks/useGuardDashboard";
 import GuardFilters from "../components/guard/GuardFilters";
 import GuardReturnsTable from "../components/guard/GuardReturnsTable";
+import StatusBanner from "../components/StatusBanner";
 
 export default function Guard() {
   const {
     locations,
     loading,
+    statusNotice,
     filterLocation,
     searchQuery,
     filteredItems,
     setFilterLocation,
     setSearchQuery,
+    clearStatusNotice,
     loadBookings,
     handleMarkReceived,
   } = useGuardDashboard();
 
   return (
     <div className="max-w-6xl mx-auto pb-10 space-y-6">
+      <StatusBanner notice={statusNotice} onClose={clearStatusNotice} />
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">
-            Station Guard Dashboard
-          </h1>
-          <p className="text-slate-500 mt-1">
+          <h1 className="page-title">Station Guard Dashboard</h1>
+          <p className="page-subtitle">
             Verify returned cycles and manage station inventory.
           </p>
         </div>

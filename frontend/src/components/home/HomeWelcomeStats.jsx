@@ -6,10 +6,12 @@ function HomeWelcomeStats({ user, activeCount, returnedCount, onPayPenalty }) {
     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">
+          <h1 className="page-title text-2xl md:text-2xl">
             Hello, {user?.fullName?.split(" ")[0] || "Student"}
           </h1>
-          <p className="text-slate-500 text-sm mt-1">Ready to ride today?</p>
+          <p className="page-subtitle text-sm md:text-sm">
+            Ready to ride today?
+          </p>
         </div>
       </div>
 

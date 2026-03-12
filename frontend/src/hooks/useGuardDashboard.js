@@ -9,6 +9,9 @@ export function useGuardDashboard() {
   const [loading, setLoading] = useState(false);
   const [filterLocation, setFilterLocation] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusNotice, setStatusNotice] = useState(null);
+
+  const clearStatusNotice = () => setStatusNotice(null);
 
   const loadLocations = async () => {
     try {
@@ -43,10 +46,17 @@ export function useGuardDashboard() {
     try {
       const res = await api.patch(`/guard/mark-received/${bookingId}`);
       if (isApiSuccess(res, [200])) {
+        setStatusNotice({
+          type: "success",
+          message: "Cycle marked as received successfully.",
+        });
         loadBookings();
       }
     } catch (e) {
-      alert(e?.response?.data?.message || "Failed to action");
+      setStatusNotice({
+        type: "error",
+        message: e?.response?.data?.message || "Failed to update booking.",
+      });
     }
   };
 
@@ -81,11 +91,13 @@ export function useGuardDashboard() {
   return {
     locations,
     loading,
+    statusNotice,
     filterLocation,
     searchQuery,
     filteredItems,
     setFilterLocation,
     setSearchQuery,
+    clearStatusNotice,
     loadBookings,
     handleMarkReceived,
   };

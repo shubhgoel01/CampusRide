@@ -19,7 +19,7 @@ export default function GuardReturnsTable({ loading, items, onMarkReceived }) {
 
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm text-slate-600">
-          <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-100">
+          <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-100 sticky top-0 z-10">
             <tr>
               <th className="px-6 py-4">Cycle</th>
               <th className="px-6 py-4">User</th>
@@ -44,9 +44,9 @@ export default function GuardReturnsTable({ loading, items, onMarkReceived }) {
               <tr>
                 <td
                   colSpan="6"
-                  className="px-6 py-12 text-center text-slate-400"
+                  className="px-6 py-12 text-center text-slate-500"
                 >
-                  No bookings waiting for verification.
+                  No bookings are waiting for verification right now.
                 </td>
               </tr>
             )}
@@ -64,7 +64,7 @@ export default function GuardReturnsTable({ loading, items, onMarkReceived }) {
                 return (
                   <tr
                     key={item._id}
-                    className="hover:bg-slate-50 transition-colors group"
+                    className="odd:bg-white even:bg-slate-50/40 hover:bg-slate-50 transition-colors group"
                   >
                     <td className="px-6 py-4">
                       <div className="font-mono font-bold text-slate-700">

@@ -9,6 +9,7 @@ import HomeWelcomeStats from "../components/home/HomeWelcomeStats";
 import HomeBookingForm from "../components/home/HomeBookingForm";
 import RideSummaryCard from "../components/home/RideSummaryCard";
 import ReturnedBookingCard from "../components/home/ReturnedBookingCard";
+import StatusBanner from "../components/StatusBanner";
 
 export default function Home() {
   const {
@@ -30,10 +31,13 @@ export default function Home() {
     showReturnedModal,
     selectedReturnedBooking,
     elapsedMs,
+    notice,
     setStartLoc,
     setEndLoc,
     setShowPaymentBookingId,
     setPaymentAmount,
+    showNotice,
+    clearNotice,
     handlePayPenalty,
     handleEndBookingById,
     openActiveBooking,
@@ -48,6 +52,11 @@ export default function Home() {
   const activeBooking = activeBookings?.[0] || null;
   const returnedBooking = returnedBookings?.[0] || null;
   const hasBlockingBooking = Boolean(activeBooking || returnedBooking);
+  const bookingDisabledReason = activeBooking
+    ? "You already have an active ride. End your current ride before booking a new cycle."
+    : returnedBooking
+      ? "Your previous ride is awaiting guard verification. New bookings are enabled once verification is complete."
+      : "";
 
   const activeCycleLabel = useMemo(
     () => activeBooking?.cycle?.cycleName || "-",
@@ -93,6 +102,8 @@ export default function Home() {
       </div>
 
       <div className="flex flex-col gap-6 h-full overflow-y-auto pr-2 pb-4">
+        <StatusBanner notice={notice} onClose={clearNotice} />
+
         <HomeWelcomeStats
           user={user}
           activeCount={activeBookings.length}
@@ -120,6 +131,7 @@ export default function Home() {
 
         <HomeBookingForm
           disabled={hasBlockingBooking}
+          disabledReason={bookingDisabledReason}
           locations={locationsList}
           startLoc={startLoc}
           endLoc={endLoc}
@@ -146,13 +158,13 @@ export default function Home() {
             bookingId={showPaymentBookingId}
             amount={paymentAmount}
             onSuccess={async () => {
-              alert("Payment successful! Penalty cleared.");
+              showNotice("success", "Payment successful. Penalty cleared.");
               await loadUserAndBookings();
               setShowPaymentBookingId(null);
               setPaymentAmount(0);
             }}
             onError={(err) => {
-              alert(err?.message || "Payment failed");
+              showNotice("error", err?.message || "Payment failed");
             }}
           />
         </Modal>

@@ -7,7 +7,7 @@ export default function AdminActiveRidesTable({ bookings, onOpenBooking }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm text-slate-600">
-        <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500">
+        <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 sticky top-0 z-10">
           <tr>
             <th className="px-6 py-4">User</th>
             <th className="px-6 py-4">Cycle</th>
@@ -21,7 +21,7 @@ export default function AdminActiveRidesTable({ bookings, onOpenBooking }) {
             <tr
               key={b._id}
               onClick={() => onOpenBooking(b)}
-              className="hover:bg-slate-50 transition-colors cursor-pointer"
+              className="odd:bg-white even:bg-slate-50/40 hover:bg-slate-50 transition-colors cursor-pointer"
             >
               <td className="px-6 py-4 font-medium text-slate-900">
                 {b.user?.fullName || b.userId}
@@ -40,8 +40,8 @@ export default function AdminActiveRidesTable({ bookings, onOpenBooking }) {
           ))}
           {bookings.length === 0 && (
             <tr>
-              <td colSpan="5" className="px-6 py-8 text-center text-slate-400">
-                No active rides right now.
+              <td colSpan="5" className="px-6 py-10 text-center text-slate-500">
+                No active rides right now. Live rides will appear here.
               </td>
             </tr>
           )}

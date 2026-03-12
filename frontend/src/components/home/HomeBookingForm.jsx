@@ -2,6 +2,7 @@ import React from "react";
 
 export default function HomeBookingForm({
   disabled,
+  disabledReason,
   locations,
   startLoc,
   endLoc,
@@ -21,6 +22,12 @@ export default function HomeBookingForm({
         <span className="w-1 h-6 bg-primary rounded-full"></span>
         Rent a Cycle
       </h2>
+
+      {disabled && disabledReason && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {disabledReason}
+        </div>
+      )}
 
       <div className="space-y-4">
         <div>

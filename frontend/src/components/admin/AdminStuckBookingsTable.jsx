@@ -9,7 +9,7 @@ export default function AdminStuckBookingsTable({ bookings, onOpenBooking }) {
         minutes. They might be abandoned or have had a network failure.
       </div>
       <table className="w-full text-left text-sm text-slate-600">
-        <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500">
+        <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 sticky top-0 z-10">
           <tr>
             <th className="px-6 py-4">User</th>
             <th className="px-6 py-4">Cycle</th>
@@ -21,8 +21,9 @@ export default function AdminStuckBookingsTable({ bookings, onOpenBooking }) {
         <tbody className="divide-y divide-slate-100">
           {bookings.length === 0 && (
             <tr>
-              <td colSpan="5" className="px-6 py-8 text-center text-slate-400">
-                No stuck bookings found. Used filter: &gt; 30 mins
+              <td colSpan="5" className="px-6 py-10 text-center text-slate-500">
+                No stuck bookings found for the current threshold (&gt; 30
+                mins).
               </td>
             </tr>
           )}
@@ -34,7 +35,7 @@ export default function AdminStuckBookingsTable({ bookings, onOpenBooking }) {
               <tr
                 key={b._id}
                 onClick={() => onOpenBooking(b)}
-                className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                className="odd:bg-white even:bg-slate-50/40 hover:bg-slate-50 transition-colors cursor-pointer group"
               >
                 <td className="px-6 py-4 font-medium text-slate-900">
                   {b.user?.fullName || b.userId}

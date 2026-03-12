@@ -6,7 +6,6 @@ import Home from "./pages/Home";
 import History from "./pages/History";
 import HowItWorks from "./pages/HowItWorks";
 import Support from "./pages/Support";
-import Navbar from "./components/Navbar";
 import Admin from "./pages/Admin";
 import Guard from "./pages/Guard";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -58,6 +57,14 @@ export default function App() {
                 <DashboardLayout>
                   <History />
                 </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/new-booking"
+            element={
+              <ProtectedRoute>
+                <Navigate to="/home" replace />
               </ProtectedRoute>
             }
           />

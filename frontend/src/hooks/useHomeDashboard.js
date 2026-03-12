@@ -33,6 +33,15 @@ export function useHomeDashboard() {
   const [showReturnedModal, setShowReturnedModal] = useState(false);
   const [selectedReturnedBooking, setSelectedReturnedBooking] = useState(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [notice, setNotice] = useState(null);
+
+  const showNotice = useCallback((type, message) => {
+    setNotice({ type, message });
+  }, []);
+
+  const clearNotice = useCallback(() => {
+    setNotice(null);
+  }, []);
 
   const reloadBookings = useCallback(async (userId) => {
     try {
@@ -107,9 +116,13 @@ export function useHomeDashboard() {
   }, [activeBookings]);
 
   const handlePayPenalty = () => {
-    if (!user) return alert("No user loaded");
+    if (!user) {
+      showNotice("error", "No user loaded");
+      return;
+    }
     if (!user.penaltyAmount || user.penaltyAmount <= 0) {
-      return alert("No penalty to pay");
+      showNotice("info", "No penalty to pay");
+      return;
     }
 
     const dummyPenaltyId = "000000000000000000000000";
@@ -122,11 +135,14 @@ export function useHomeDashboard() {
     try {
       const res = await endBooking(bookingId);
       if (isApiSuccess(res, [200])) {
-        alert("Booking ended – waiting for guard verification");
+        showNotice("success", "Booking ended. Waiting for guard verification.");
         await reloadBookings(user?._id);
       }
     } catch (err) {
-      alert(err?.response?.data?.message || "Failed to end booking");
+      showNotice(
+        "error",
+        err?.response?.data?.message || "Failed to end booking",
+      );
     }
   };
 
@@ -135,11 +151,14 @@ export function useHomeDashboard() {
     try {
       const res = await cancelBooking(bookingId);
       if (isApiSuccess(res, [200])) {
-        alert("Booking cancelled");
+        showNotice("success", "Booking cancelled");
         await reloadBookings(user?._id);
       }
     } catch (err) {
-      alert(err?.response?.data?.message || "Failed to cancel booking");
+      showNotice(
+        "error",
+        err?.response?.data?.message || "Failed to cancel booking",
+      );
     }
   };
 
@@ -201,7 +220,8 @@ export function useHomeDashboard() {
     setIsCreating(true);
     try {
       if (user && user.penaltyAmount && Number(user.penaltyAmount) > 0) {
-        alert(
+        showNotice(
+          "error",
           "You have an outstanding penalty. Please pay it before creating a new booking.",
         );
         return;
@@ -210,7 +230,8 @@ export function useHomeDashboard() {
         (activeBookings && activeBookings.length > 0) ||
         (returnedBookings && returnedBookings.length > 0)
       ) {
-        alert(
+        showNotice(
+          "error",
           "You already have an active or recently returned booking. Please resolve it before creating a new booking.",
         );
         return;
@@ -227,16 +248,18 @@ export function useHomeDashboard() {
       };
       const res = await createBooking(payload);
       if (isApiSuccess(res, [201])) {
-        alert("Booking created");
+        showNotice("success", "Booking created");
         await loadUserAndBookings();
       } else {
         const msg =
           res?.data?.message || res?.data?.error || "Failed to create booking";
         setError(msg);
-        alert(msg);
+        showNotice("error", msg);
       }
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to create booking");
+      const msg = err?.response?.data?.message || "Failed to create booking";
+      setError(msg);
+      showNotice("error", msg);
     } finally {
       setIsCreating(false);
     }
@@ -261,10 +284,13 @@ export function useHomeDashboard() {
     showReturnedModal,
     selectedReturnedBooking,
     elapsedMs,
+    notice,
     setStartLoc,
     setEndLoc,
     setShowPaymentBookingId,
     setPaymentAmount,
+    showNotice,
+    clearNotice,
     handlePayPenalty,
     handleEndBookingById,
     handleCancelBooking,

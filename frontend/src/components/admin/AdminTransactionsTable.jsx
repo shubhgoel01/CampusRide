@@ -8,7 +8,7 @@ export default function AdminTransactionsTable({ transactions }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm text-slate-600">
-        <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500">
+        <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 sticky top-0 z-10">
           <tr>
             <th className="px-6 py-4">Date</th>
             <th className="px-6 py-4">User</th>
@@ -17,8 +17,18 @@ export default function AdminTransactionsTable({ transactions }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
+          {transactions.length === 0 && (
+            <tr>
+              <td colSpan="4" className="px-6 py-10 text-center text-slate-500">
+                No transactions found for this period.
+              </td>
+            </tr>
+          )}
           {transactions.map((t) => (
-            <tr key={t._id} className="hover:bg-slate-50 transition-colors">
+            <tr
+              key={t._id}
+              className="odd:bg-white even:bg-slate-50/40 hover:bg-slate-50 transition-colors"
+            >
               <td className="px-6 py-4">{formatDateOnly(t.createdAt)}</td>
               <td className="px-6 py-4">{t.userName || t.userId}</td>
               <td className="px-6 py-4 font-mono font-medium text-slate-800">

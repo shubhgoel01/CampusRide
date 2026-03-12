@@ -30,6 +30,11 @@ export function useAdminDashboard() {
   const [modalBooking, setModalBooking] = useState(null);
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [statusNotice, setStatusNotice] = useState(null);
+
+  const clearStatusNotice = () => setStatusNotice(null);
+  const pushStatusNotice = (type, message) =>
+    setStatusNotice({ type, message });
 
   const loadStats = async () => {
     try {
@@ -120,11 +125,14 @@ export function useAdminDashboard() {
     }
     try {
       await deleteUser(uId);
-      alert("User removed");
+      setStatusNotice({
+        type: "success",
+        message: "User removed successfully.",
+      });
       loadData();
       setUserModalOpen(false);
     } catch (e) {
-      alert("Failed to remove user");
+      setStatusNotice({ type: "error", message: "Failed to remove user." });
     }
   };
 
@@ -140,6 +148,7 @@ export function useAdminDashboard() {
     locations,
     modalOpen,
     modalBooking,
+    statusNotice,
     userModalOpen,
     selectedUser,
     setTab,
@@ -148,6 +157,8 @@ export function useAdminDashboard() {
     setModalBooking,
     setUserModalOpen,
     setSelectedUser,
+    clearStatusNotice,
+    pushStatusNotice,
     handleRemoveUser,
   };
 }
