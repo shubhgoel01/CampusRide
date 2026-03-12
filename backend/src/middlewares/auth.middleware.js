@@ -1,33 +1,46 @@
-import asyncHandler from "../utils/asyncHandler.utils.js"
-import jwt from "jsonwebtoken"
-import ApiError from "../utils/ApiError.utils.js"
-import { User } from "../models/user.models.js"
+import asyncHandler from "../utils/asyncHandler.utils.js";
+import jwt from "jsonwebtoken";
+import ApiError from "../utils/ApiError.utils.js";
+import { User } from "../models/user.models.js";
 const verifyUser = asyncHandler(async (req, res, next) => {
-    // console.log(req.cookies)
-    const accessToken = (req.header("Authorization")?.replace("Bearer ", "")) || req.cookies?.accessToken
+  // console.log(req.cookies)
+  const accessToken =
+    req.header("Authorization")?.replace("Bearer ", "") ||
+    req.cookies?.accessToken;
 
-    if(!accessToken){
-        // console.log("verifyUser Access token not found")
-        throw new ApiError(401, "Unauthorized Access", "accessToken not found", "verifyUser: auth.middleWare.js")
-    }
+  if (!accessToken) {
+    // console.log("verifyUser Access token not found")
+    throw new ApiError(
+      401,
+      "Unauthorized Access",
+      "accessToken not found",
+      "verifyUser: auth.middleWare.js",
+    );
+  }
 
-    const decodedToken = jwt.verify(accessToken, process.env.ACCESS_TOKEN_SECRET)
-    // console.log("decoded token", decodedToken)
-    
-    if(!decodedToken){
-        // console.log("decoded token not found")
-        throw new ApiError(401, "Unauthorized Access", "accessToken has expired", "verifyUser: auth.middleWare.js")
-    }
+  const decodedToken = jwt.verify(accessToken, process.env.ACCESS_TOKEN_SECRET);
+  // console.log("decoded token", decodedToken)
 
-    const user = await User.findById(decodedToken?._id).select("-password -refreshtoken")
+  if (!decodedToken) {
+    // console.log("decoded token not found")
+    throw new ApiError(
+      401,
+      "Unauthorized Access",
+      "accessToken has expired",
+      "verifyUser: auth.middleWare.js",
+    );
+  }
 
-    if(!user)
-        throw new ApiError(401, "User not found")
+  const user = await User.findById(decodedToken?._id).select(
+    "-password -refreshToken",
+  );
 
-    req.user = user
+  if (!user) throw new ApiError(401, "User not found");
 
-    // console.log("verify user ended")
-    next()
-})
+  req.user = user;
 
-export default verifyUser
+  // console.log("verify user ended")
+  next();
+});
+
+export default verifyUser;

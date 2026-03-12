@@ -2,7 +2,6 @@ import asyncHandler from "../utils/asyncHandler.utils.js";
 import { Location } from "../models/location.model.js";
 import ApiError from "../utils/ApiError.utils.js";
 
-
 /*
     This middle ware is designed to handle geocoding => name to coordinates (based on saved locations)
     Scalability and other cases are kept in mind while designing, location can be sent as a filter (then in query) or in the body
@@ -17,16 +16,12 @@ import ApiError from "../utils/ApiError.utils.js";
 export const geoCoding = asyncHandler(async (req, res, next) => {
   let locationNames = [];
 
-  if (req.query?.location) 
-    locationNames = [req.query.location];
-
-  else if (Array.isArray(req.body?.location)) 
-    locationNames = req.body.location;
-  else if (req.body?.location && typeof req.body.location === 'string')
+  if (req.query?.location) locationNames = [req.query.location];
+  else if (Array.isArray(req.body?.location)) locationNames = req.body.location;
+  else if (req.body?.location && typeof req.body.location === "string")
     locationNames = [req.body.location];
 
-  if(locationNames.length <= 0)
-    return next()
+  if (locationNames.length <= 0) return next();
 
   const locations = [];
 
@@ -35,24 +30,25 @@ export const geoCoding = asyncHandler(async (req, res, next) => {
     const normalized = String(name).trim().toLowerCase();
     const result = await Location.findOne({ name: normalized });
 
-    if (!result) 
-        throw new ApiError(404, `Location "${name}" not found`);
+    if (!result) throw new ApiError(404, `Location "${name}" not found`);
 
-    const data = result.toJSON()
+    const data = result.toJSON();
 
     const coordinates = {
       type: "Point",
-      coordinates: [Number(data.coordinates.coordinates[0]), Number(data.coordinates.coordinates[1])]
-    }
+      coordinates: [
+        Number(data.coordinates.coordinates[0]),
+        Number(data.coordinates.coordinates[1]),
+      ],
+    };
 
     locations.push({
-        name: result?.name,
-        coordinates: coordinates
+      name: result?.name,
+      coordinates: coordinates,
     });
   }
 
-  req.locations = locations
-  console.log("location middleware", locations)
+  req.locations = locations;
 
-  next()
+  next();
 });

@@ -23,8 +23,11 @@ const transactionSchema = mongoose.Schema(
     receiptUrl: { type: String }, // Stripe gives this
     paidAt: { type: Date },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-export const Transaction = mongoose.model("Transaction", transactionSchema);
+transactionSchema.index({ paymentIntentId: 1 }, { unique: true });
+transactionSchema.index({ userId: 1, createdAt: -1 });
+transactionSchema.index({ bookingId: 1, createdAt: -1 });
 
+export const Transaction = mongoose.model("Transaction", transactionSchema);

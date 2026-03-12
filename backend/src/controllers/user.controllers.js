@@ -7,64 +7,54 @@ import asyncHandler from "../utils/asyncHandler.utils.js";
 import { User } from "../models/user.models.js";
 
 // GET
-const getUserDetails_By_Id_UserName_AllController = asyncHandler(async (req, res) => {
-  const { userId_userName } = req.query;
-  // If no query param provided, return the authenticated user's profile
-  if (!userId_userName) {
-    const loggedInUser = req.user;
-    if (!loggedInUser) {
-      throw new ApiError(401, 'Unauthorized', 'User not authenticated');
+const getUserDetails_By_Id_UserName_AllController = asyncHandler(
+  async (req, res) => {
+    const { userId_userName } = req.query;
+    // If no query param provided, return the authenticated user's profile
+    if (!userId_userName) {
+      const loggedInUser = req.user;
+      if (!loggedInUser) {
+        throw new ApiError(401, "Unauthorized", "User not authenticated");
+      }
+
+      const userObj = loggedInUser.toObject();
+      delete userObj.refreshToken;
+      delete userObj.__v;
+
+      return res
+        .status(200)
+        .json(new ApiResponse(200, "User fetched successfully", userObj));
     }
 
-    const userObj = loggedInUser.toObject();
-    delete userObj.refreshToken;
-    delete userObj.__v;
+    let matchQuery = {};
+
+    if (userId_userName && mongoose.Types.ObjectId.isValid(userId_userName))
+      matchQuery = { _id: new mongoose.Types.ObjectId(userId_userName) };
+    else if (userId_userName) matchQuery = { userName: userId_userName };
+
+    const result = await User.find(matchQuery)
+      .sort({ userName: 1 })
+      .select("-password -refreshToken -__v")
+      .lean();
+
+    if (!result) {
+      throw new ApiError(500, "Something went wrong");
+    }
 
     return res
       .status(200)
-      .json(new ApiResponse(200, 'User fetched successfully', userObj));
-  }
-
-  let matchQuery = {};
-
-  if(userId_userName && mongoose.Types.ObjectId.isValid(userId_userName))
-    matchQuery = { _id: new mongoose.Types.ObjectId(userId_userName) };
-  else if(userId_userName)
-    matchQuery = { userName: userId_userName };
-
-  const result = await User.aggregate([
-    {
-      $match: matchQuery,
-    },
-    {
-      $sort: { userName: -1 },
-    },
-    {
-      $project: {
-        password: 0,
-        refreshToken: 0,
-        __v: 0,
-      },
-    },
-  ]);
-
-  if (!result) {
-    throw new ApiError(500, "Something went wrong");
-  }
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, 'User(s) fetched successfully', result));
-});
+      .json(new ApiResponse(200, "User(s) fetched successfully", result));
+  },
+);
 
 //PATCH
 const updateUserDetailsController = asyncHandler(async (req, res) => {
   const loggedInUser = req.user;
   const { userName, email, phone } = req.body;
-  const {userId} = req.params
-  
-  if(!userId || userId!=loggedInUser._id)
-      throw new ApiError(404, "Invalid Request")
+  const { userId } = req.params;
+
+  if (!userId || userId != loggedInUser._id)
+    throw new ApiError(404, "Invalid Request");
 
   const updatedUser = await User.findByIdAndUpdate(
     loggedInUser._id,
@@ -73,11 +63,10 @@ const updateUserDetailsController = asyncHandler(async (req, res) => {
       ...(email && { email }),
       ...(phone && { phone }),
     },
-    { new: true }
+    { new: true },
   );
 
-  if (!updatedUser) 
-    throw new ApiError(400, 'Failed to update user');
+  if (!updatedUser) throw new ApiError(400, "Failed to update user");
 
   const userObj = updatedUser.toObject();
 
@@ -87,36 +76,42 @@ const updateUserDetailsController = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, 'User updated successfully', userObj));
+    .json(new ApiResponse(200, "User updated successfully", userObj));
 });
 
 //DELETE
 const deleteUserController = asyncHandler(async (req, res) => {
   const { userId } = req.params;
-  const loggedInUser = req.user
-  
-  if(!userId || loggedInUser._id != userId)
-    throw new ApiError(404, "Invalid Request")
+  const loggedInUser = req.user;
+
+  if (!userId || loggedInUser._id != userId)
+    throw new ApiError(404, "Invalid Request");
 
   const user = await User.findById(userId);
-  if (!user) 
-    throw new ApiError(404, 'User not found');
+  if (!user) throw new ApiError(404, "User not found");
 
   await user.deleteOne();
 
   return res
     .status(200)
-    .json(new ApiResponse(200, 'User deleted successfully', null));
+    .json(new ApiResponse(200, "User deleted successfully", null));
 });
 
-// GET - Admin: get all users 
+// GET - Admin: get all users
 const getAllUsersController = asyncHandler(async (req, res) => {
-  const result = await User.aggregate([
-    { $sort: { userName: -1 } },
-    { $project: { password: 0, refreshToken: 0, __v: 0 } }
-  ])
+  const result = await User.find({})
+    .sort({ userName: 1 })
+    .select("-password -refreshToken -__v")
+    .lean();
 
-  return res.status(200).json(new ApiResponse(200, 'All users fetched successfully', result));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "All users fetched successfully", result));
 });
 
-export {getUserDetails_By_Id_UserName_AllController, updateUserDetailsController, deleteUserController, getAllUsersController}
+export {
+  getUserDetails_By_Id_UserName_AllController,
+  updateUserDetailsController,
+  deleteUserController,
+  getAllUsersController,
+};

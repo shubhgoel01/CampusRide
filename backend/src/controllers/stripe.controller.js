@@ -9,11 +9,13 @@ const DEFAULT_CURRENCY = "inr";
 const createPaymentIntent = asyncHandler(async (req, res) => {
   const { amount } = req.body;
   const { bookingId } = req.params;
-  console.log('[stripe] createPaymentIntent called', { bookingId, amount, user: req.user?._id });
 
   const amountNum = Number(amount);
   if (isNaN(amountNum) || amountNum <= 0) {
-    throw new ApiError(400, 'Invalid amount provided. Amount must be a positive number (in rupees).');
+    throw new ApiError(
+      400,
+      "Invalid amount provided. Amount must be a positive number (in rupees).",
+    );
   }
 
   // Amount expected in Rupees, convert to Paise (1 Rupee = 100 Paise)
@@ -27,14 +29,14 @@ const createPaymentIntent = asyncHandler(async (req, res) => {
       automatic_payment_methods: { enabled: true },
     });
   } catch (err) {
-    console.error('[stripe] paymentIntents.create error', err);
-    const stripeMessage = err?.raw?.message || err?.message || 'Stripe error';
+    console.error("[stripe] paymentIntents.create error", err);
+    const stripeMessage = err?.raw?.message || err?.message || "Stripe error";
     const stripeCode = err?.raw?.code || err?.code || null;
-    if (err?.statusCode === 400 || stripeCode === 'amount_too_small') {
+    if (err?.statusCode === 400 || stripeCode === "amount_too_small") {
       throw new ApiError(400, stripeMessage);
     }
 
-    throw new ApiError(500, 'Failed to create payment intent');
+    throw new ApiError(500, "Failed to create payment intent");
   }
 
   res.status(200).json({
@@ -71,7 +73,7 @@ const createTransaction = asyncHandler(async (req, res) => {
     await User.findByIdAndUpdate(user._id, {
       $set: {
         penaltyAmount: Math.max(0, (user.penaltyAmount || 0) - paidPaise),
-        hasPenalty: ((user.penaltyAmount || 0) - paidPaise) > 0,
+        hasPenalty: (user.penaltyAmount || 0) - paidPaise > 0,
       },
     });
   }
@@ -80,9 +82,13 @@ const createTransaction = asyncHandler(async (req, res) => {
 });
 
 const getStripeConfig = asyncHandler(async (req, res) => {
-  const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY || process.env.VITE_STRIPE_PUBLISHABLE_KEY || null;
-  console.log('[stripe] getStripeConfig called, hasPublishableKey=', !!publishableKey)
-  const isTestKey = publishableKey ? publishableKey.startsWith('pk_test_') : false;
+  const publishableKey =
+    process.env.STRIPE_PUBLISHABLE_KEY ||
+    process.env.VITE_STRIPE_PUBLISHABLE_KEY ||
+    null;
+  const isTestKey = publishableKey
+    ? publishableKey.startsWith("pk_test_")
+    : false;
   res.json({
     publishableKey,
     isTestKey,
