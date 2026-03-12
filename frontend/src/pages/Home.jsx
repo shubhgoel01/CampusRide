@@ -22,6 +22,8 @@ export default function Home() {
     locationsList,
     startLoc,
     endLoc,
+    bookingStep,
+    rideEstimate,
     isSearching,
     isCreating,
     foundCycle,
@@ -44,6 +46,9 @@ export default function Home() {
     openReturnedBooking,
     closeActiveBooking,
     closeReturnedBooking,
+    handleGoToAvailabilityStep,
+    handleCheckAvailabilityStep,
+    handleBackBookingStep,
     handleFindCycle,
     handleCreateBooking,
     loadUserAndBookings,
@@ -135,13 +140,18 @@ export default function Home() {
           locations={locationsList}
           startLoc={startLoc}
           endLoc={endLoc}
+          bookingStep={bookingStep}
+          rideEstimate={rideEstimate}
           isSearching={isSearching}
           isCreating={isCreating}
           error={error}
           foundCycle={foundCycle}
           onStartChange={setStartLoc}
           onEndChange={setEndLoc}
-          onAction={foundCycle ? handleCreateBooking : handleFindCycle}
+          onStepContinue={handleGoToAvailabilityStep}
+          onCheckAvailability={handleCheckAvailabilityStep}
+          onFinalize={handleCreateBooking}
+          onStepBack={handleBackBookingStep}
         />
       </div>
 
